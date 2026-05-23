@@ -364,15 +364,18 @@ a:hover { border-bottom-color: var(--ink); }
 .form-row { display: flex; flex-direction: column; gap: 4px; }
 .form-row.full { grid-column: 1 / -1; }
 .form-lbl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
-.form-row input, .form-row select, .form-row textarea {
+.form-row input:not([type="radio"]):not([type="checkbox"]),
+.form-row select, .form-row textarea {
   font: inherit; font-size: 16px; padding: 6px 9px; border: 1px solid var(--rule-strong);
   background: var(--bg); border-radius: 0; color: var(--ink); font-family: var(--mono); width: 100%;
 }
-.form-row input:focus, .form-row select:focus, .form-row textarea:focus {
+.form-row input:not([type="radio"]):not([type="checkbox"]):focus,
+.form-row select:focus, .form-row textarea:focus {
   outline: 1px solid var(--ink); outline-offset: -1px; border-color: var(--ink);
 }
-.form-radio { display: flex; gap: 14px; padding-top: 4px; }
-.form-radio label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.form-radio { display: flex; gap: 18px; padding-top: 4px; }
+.form-radio label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.form-radio input[type="radio"] { width: auto; flex: none; margin: 0; }
 
 .pill-toggle { display: inline-flex; border: 1px solid var(--rule-strong); width: fit-content; }
 .pill-toggle button {
