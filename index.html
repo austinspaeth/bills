@@ -300,6 +300,49 @@ a:hover { border-bottom-color: var(--ink); }
 }
 .add-quick-collapsed:hover { color: var(--ink); }
 
+.extras { margin-bottom: 36px; }
+.extras-head {
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3);
+  padding-bottom: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--ink);
+  display: flex; justify-content: space-between;
+}
+.extra-row {
+  display: grid; grid-template-columns: 80px 1fr auto 28px;
+  gap: 12px; align-items: baseline;
+  padding: 8px 0; border-bottom: 1px solid var(--rule); font-size: 13px;
+}
+.extra-date { font-size: 11px; color: var(--ink-3); letter-spacing: .04em; text-transform: uppercase; }
+.extra-name { font-size: 13px; }
+.extra-amt { font-size: 14px; color: var(--ink); white-space: nowrap; }
+.extra-del {
+  appearance: none; border: 0; background: transparent; color: var(--ink-3);
+  font: inherit; font-size: 14px; cursor: pointer; padding: 0; line-height: 1;
+}
+.extra-del:hover { color: var(--ink); }
+.extra-form {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 10px 0; border-bottom: 1px solid var(--rule);
+}
+.extra-form input {
+  font: inherit; padding: 6px 9px; border: 1px solid var(--rule-strong);
+  background: var(--bg); color: var(--ink); font-family: var(--mono); border-radius: 0;
+}
+.extra-form input:focus { outline: 1px solid var(--ink); outline-offset: -1px; border-color: var(--ink); }
+.extra-form .ex-name { flex: 1; min-width: 140px; }
+.extra-form .ex-amt { width: 100px; text-align: right; }
+.extra-form .btn-primary {
+  appearance: none; padding: 6px 14px; font: inherit;
+  background: var(--ink); color: var(--bg); border: 1px solid var(--ink);
+  border-radius: 0; cursor: pointer; letter-spacing: .06em; text-transform: uppercase;
+  font-size: 11px; font-family: var(--mono);
+}
+.extra-form .btn-secondary {
+  appearance: none; padding: 6px 14px; font: inherit; background: transparent;
+  color: var(--ink-3); border: 1px solid var(--rule-strong); border-radius: 0;
+  cursor: pointer; letter-spacing: .06em; text-transform: uppercase; font-size: 11px; font-family: var(--mono);
+}
+.extra-form .btn-secondary:hover { color: var(--ink); border-color: var(--ink); }
+
 .form-panel {
   border: 1px solid var(--ink); padding: 20px 22px; margin-bottom: 12px; background: var(--bg);
 }
@@ -360,6 +403,17 @@ a:hover { border-bottom-color: var(--ink); }
 </style>
 </head>
 <body class="theme-paper density-regular">
+  <script>
+    try {
+      const s = JSON.parse(localStorage.getItem('bills.v1'));
+      if (s && s.settings) {
+        const theme = s.settings.theme || 'paper';
+        const density = s.settings.density || 'regular';
+        document.body.className = `theme-${theme} density-${density}`;
+        document.documentElement.style.setProperty('--paid-decoration', s.settings.strikePaid === false ? 'none' : 'line-through');
+      }
+    } catch(e) {}
+  </script>
   <div id="root"></div>
   <input type="file" id="import-file" accept="application/json" style="display:none" />
 
@@ -399,6 +453,7 @@ const GROUP_ORDER_CAT = ['recurring', 'cc', 'loan', 'oneoff', 'savings'];
 const DEFAULT_STATE = {
   bills: [],
   paid: {},
+  incomeEvents: [],       // [{ id, name, amount, date: 'YYYY-MM-DD' }]
   paycheck: 0,
   checking: 0,
   payAnchor: null,        // ISO date — last/known paycheck Friday; biweekly from here
@@ -487,6 +542,40 @@ function billsForPeriod(bills, period) {
     .filter(b => isBillInPeriod(b, period))
     .map(b => ({ ...b, dueDate: billDueDate(b, period) }))
     .sort((a, b) => a.dueDate - b.dueDate);
+}
+
+// ── Numeric input that lets you clear the field ────────────────────────────
+// Controlled type=number with value={0} prevents deleting the leading "0".
+// We keep a local string buffer that the user types into; on each keystroke
+// we parse and bubble up a number (or 0 for empty/invalid input).
+function NumericInput({ value, onChange, className, ...rest }) {
+  const [text, setText] = useState(() => (value === 0 || value == null) ? '' : String(value));
+  const lastRef = useRef(value);
+  useEffect(() => {
+    const parsed = parseFloat(text);
+    const current = Number.isNaN(parsed) ? 0 : parsed;
+    if (Math.abs(current - value) > 1e-6 && value !== lastRef.current) {
+      lastRef.current = value;
+      setText((value === 0 || value == null) ? '' : String(value));
+    }
+  }, [value]);
+  return (
+    <input
+      {...rest}
+      className={className}
+      value={text}
+      onChange={(e) => {
+        const t = e.target.value;
+        setText(t);
+        if (t === '' || t === '-' || t === '.' || t === '-.') {
+          if (value !== 0) { lastRef.current = 0; onChange(0); }
+          return;
+        }
+        const n = parseFloat(t);
+        if (!Number.isNaN(n)) { lastRef.current = n; onChange(n); }
+      }}
+    />
+  );
 }
 
 // ── Paid Mark (stamp style) ─────────────────────────────────────────────────
@@ -835,6 +924,7 @@ function App() {
   }, []);
   const [bills, setBills] = useState(initial.bills);
   const [paid, setPaid] = useState(initial.paid);
+  const [incomeEvents, setIncomeEvents] = useState(initial.incomeEvents || []);
   const [paycheck, setPaycheck] = useState(initial.paycheck);
   const [checking, setChecking] = useState(initial.checking);
   const [payAnchor, setPayAnchor] = useState(initial.payAnchor || defaultPayAnchor());
@@ -843,11 +933,13 @@ function App() {
   const [addOpen, setAddOpen] = useState(false);
   const [editingBill, setEditingBill] = useState(null);
   const [showAnchor, setShowAnchor] = useState(false);
+  const [extraFormOpen, setExtraFormOpen] = useState(false);
+  const [newExtra, setNewExtra] = useState({ name: '', amount: '', date: '' });
 
   // Persist whenever anything changes
   useEffect(() => {
-    saveState({ bills, paid, paycheck, checking, payAnchor, settings });
-  }, [bills, paid, paycheck, checking, payAnchor, settings]);
+    saveState({ bills, paid, incomeEvents, paycheck, checking, payAnchor, settings });
+  }, [bills, paid, incomeEvents, paycheck, checking, payAnchor, settings]);
 
   // Theme/density on body
   useEffect(() => {
@@ -873,7 +965,16 @@ function App() {
   const allBills = useMemo(() => billsForPeriod(bills, period), [bills, period]);
   const nextBills = useMemo(() => nextPeriod ? billsForPeriod(bills, nextPeriod) : [], [bills, nextPeriod]);
 
-  const available = checking + paycheck;
+  const extrasInPeriod = useCallback((p) => incomeEvents.filter(e => {
+    if (!e.date) return false;
+    const d = parseISO(e.date);
+    return d >= p.start && d <= p.end;
+  }), [incomeEvents]);
+
+  const periodExtras = useMemo(() => extrasInPeriod(period), [extrasInPeriod, period]);
+  const extrasTotal = periodExtras.reduce((s, e) => s + (e.amount || 0), 0);
+
+  const available = checking + paycheck + extrasTotal;
   const billsTotal = allBills.reduce((s, b) => s + (b.amount || 0), 0);
   const paidTotal = allBills.reduce((s, b) => {
     const k = `${b.id}::${period.id}`;
@@ -890,11 +991,11 @@ function App() {
   const debtAlloc = allocPool - savingsAlloc;
 
   const computeNet = useCallback((p) => {
-    const inc = paycheck;
+    const inc = paycheck + extrasInPeriod(p).reduce((s, e) => s + (e.amount || 0), 0);
     const periodBills = billsForPeriod(bills, p);
     const cost = periodBills.reduce((s, b) => s + (b.amount || 0), 0);
     return inc - cost;
-  }, [bills, paycheck]);
+  }, [bills, paycheck, extrasInPeriod]);
 
   const groupedBills = useMemo(() => {
     if (settings.grouping === 'category') {
@@ -955,9 +1056,23 @@ function App() {
 
   const flash = (msg) => { setToast(msg); setTimeout(() => setToast(null), 1800); };
 
+  const addExtra = () => {
+    const name = newExtra.name.trim();
+    const amt = parseFloat(newExtra.amount);
+    if (!name || !Number.isFinite(amt) || amt <= 0) { alert('Name and a positive amount are required.'); return; }
+    const date = newExtra.date || fmtISO(today);
+    setIncomeEvents(arr => [...arr, { id: `inc-${Date.now()}-${Math.random().toString(36).slice(2,7)}`, name, amount: amt, date }]);
+    setNewExtra({ name: '', amount: '', date: '' });
+    setExtraFormOpen(false);
+    flash('Extra added');
+  };
+  const deleteExtra = (id) => {
+    setIncomeEvents(arr => arr.filter(e => e.id !== id));
+  };
+
   // ── Export / Import ──
   const exportJSON = () => {
-    const data = { bills, paid, paycheck, checking, payAnchor, settings, exportedAt: new Date().toISOString(), version: 1 };
+    const data = { bills, paid, incomeEvents, paycheck, checking, payAnchor, settings, exportedAt: new Date().toISOString(), version: 1 };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -983,6 +1098,7 @@ function App() {
           if (!confirm('Replace your current data with the contents of this file? This cannot be undone.')) return;
           setBills(data.bills);
           setPaid(data.paid || {});
+          setIncomeEvents(Array.isArray(data.incomeEvents) ? data.incomeEvents : []);
           if (typeof data.paycheck === 'number') setPaycheck(data.paycheck);
           if (typeof data.checking === 'number') setChecking(data.checking);
           if (data.payAnchor) setPayAnchor(data.payAnchor);
@@ -1038,21 +1154,25 @@ function App() {
           <div className="income-lbl">Paycheck</div>
           <div className="income-num">
             <span className="cur">$</span>
-            <input className="income-input" type="number" step="0.01" value={paycheck}
-              onChange={e => setPaycheck(parseFloat(e.target.value) || 0)} />
+            <NumericInput className="income-input" type="number" step="0.01"
+              value={paycheck} onChange={setPaycheck} />
           </div>
-          <div className="income-sub">biweekly · {showAnchor
-            ? <input type="date" value={payAnchor} onChange={e => setPayAnchor(e.target.value)}
-                style={{ font: 'inherit', border: 0, borderBottom: '1px solid var(--ink-3)', background: 'transparent', color: 'var(--ink)' }} />
-            : <span style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                onClick={() => setShowAnchor(true)}>next pay {payAnchor}</span>}</div>
+          <div className="income-sub">
+            {extrasTotal > 0
+              ? <>+ ${moneyPlain(extrasTotal)} extra · {periodExtras.map(e => e.name).join(', ')}</>
+              : <>biweekly · {showAnchor
+                  ? <input type="date" value={payAnchor} onChange={e => setPayAnchor(e.target.value)}
+                      style={{ font: 'inherit', border: 0, borderBottom: '1px solid var(--ink-3)', background: 'transparent', color: 'var(--ink)' }} />
+                  : <span style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                      onClick={() => setShowAnchor(true)}>next pay {payAnchor}</span>}</>}
+          </div>
         </div>
         <div className="income-cell">
           <div className="income-lbl">Checking now</div>
           <div className="income-num">
             <span className="cur">$</span>
-            <input className="income-input" type="number" step="0.01" value={checking}
-              onChange={e => setChecking(parseFloat(e.target.value) || 0)} />
+            <NumericInput className="income-input" type="number" step="0.01"
+              value={checking} onChange={setChecking} />
           </div>
           <div className="income-sub">enter your current balance</div>
         </div>
@@ -1062,8 +1182,49 @@ function App() {
             <span className="cur">$</span>
             {moneyPlain(available)}
           </div>
-          <div className="income-sub">paycheck + checking</div>
+          <div className="income-sub">{extrasTotal > 0 ? <>paycheck + checking + extras</> : <>paycheck + checking</>}</div>
         </div>
+      </section>
+
+      {/* Extras (additional income for this period) */}
+      <section className="extras">
+        {(periodExtras.length > 0 || extraFormOpen) && (
+          <div className="extras-head">
+            <span>Extra income this period</span>
+            <span>{periodExtras.length} · +${moneyPlain(extrasTotal)}</span>
+          </div>
+        )}
+        {periodExtras.map(e => (
+          <div className="extra-row" key={e.id}>
+            <span className="extra-date">{shortDate(parseISO(e.date))}</span>
+            <span className="extra-name">{e.name}</span>
+            <span className="extra-amt">+${moneyPlain(e.amount)}</span>
+            <button className="extra-del" aria-label="Remove"
+              onClick={() => deleteExtra(e.id)}>×</button>
+          </div>
+        ))}
+        {extraFormOpen ? (
+          <div className="extra-form">
+            <input className="ex-name" autoFocus placeholder="source (bonus, side gig, refund…)"
+              value={newExtra.name}
+              onChange={e => setNewExtra(x => ({ ...x, name: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && addExtra()} />
+            <input className="ex-date" type="date"
+              value={newExtra.date || fmtISO(today)}
+              onChange={e => setNewExtra(x => ({ ...x, date: e.target.value }))} />
+            <input className="ex-amt" type="number" step="0.01" placeholder="0.00"
+              value={newExtra.amount}
+              onChange={e => setNewExtra(x => ({ ...x, amount: e.target.value }))}
+              onKeyDown={e => e.key === 'Enter' && addExtra()} />
+            <button className="btn-primary" onClick={addExtra}>add</button>
+            <button className="btn-secondary"
+              onClick={() => { setExtraFormOpen(false); setNewExtra({ name: '', amount: '', date: '' }); }}>cancel</button>
+          </div>
+        ) : (
+          <div className="add-quick-collapsed" onClick={() => setExtraFormOpen(true)}>
+            + add extra income
+          </div>
+        )}
       </section>
 
       {/* Math + allocation */}
@@ -1109,13 +1270,15 @@ function App() {
           </div>
           <div className="alloc-stepper">
             <label>Buffer $
-              <input type="number" min={0} step={100} value={settings.bufferTarget}
+              <NumericInput type="number" min={0} step={100}
                 style={{ width: 80 }}
-                onChange={e => setSettings(s => ({ ...s, bufferTarget: Math.max(0, parseInt(e.target.value) || 0) }))} />
+                value={settings.bufferTarget}
+                onChange={v => setSettings(s => ({ ...s, bufferTarget: Math.max(0, Math.round(v)) }))} />
             </label>
             <label>Savings
-              <input type="number" min={0} max={100} value={settings.savingsSplit}
-                onChange={e => setSettings(s => ({ ...s, savingsSplit: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }))} />%
+              <NumericInput type="number" min={0} max={100}
+                value={settings.savingsSplit}
+                onChange={v => setSettings(s => ({ ...s, savingsSplit: Math.max(0, Math.min(100, Math.round(v))) }))} />%
             </label>
             <span style={{ color: 'var(--ink-3)', fontSize: 10, letterSpacing: '0.06em' }}>
               Debt {Math.max(0, 100 - settings.savingsSplit)}%
