@@ -18,11 +18,12 @@
   --ink-4: #bbbbbb;
   --rule: #ececec;
   --rule-strong: #d4d4d4;
+  --credit: #d2691e;        /* orange accent — credit payment marker */
   --mono: "IBM Plex Mono", "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
 }
-.theme-paper { --bg:#fff; --bg-2:#f7f7f7; --bg-3:#efefef; --ink:#111; --ink-2:#4a4a4a; --ink-3:#888; --ink-4:#bbb; --rule:#ececec; --rule-strong:#d4d4d4; }
-.theme-bone  { --bg:#fafaf8; --bg-2:#f2f2ee; --bg-3:#e8e8e2; --ink:#1a1a18; --ink-2:#545450; --ink-3:#8a8a85; --ink-4:#b8b8b3; --rule:#ebebe5; --rule-strong:#d4d4ce; }
-.theme-ink   { --bg:#111; --bg-2:#1a1a1a; --bg-3:#232323; --ink:#f4f4f4; --ink-2:#b8b8b8; --ink-3:#777; --ink-4:#4a4a4a; --rule:#2a2a2a; --rule-strong:#3a3a3a; }
+.theme-paper { --bg:#fff; --bg-2:#f7f7f7; --bg-3:#efefef; --ink:#111; --ink-2:#4a4a4a; --ink-3:#888; --ink-4:#bbb; --rule:#ececec; --rule-strong:#d4d4d4; --credit:#d2691e; }
+.theme-bone  { --bg:#fafaf8; --bg-2:#f2f2ee; --bg-3:#e8e8e2; --ink:#1a1a18; --ink-2:#545450; --ink-3:#8a8a85; --ink-4:#b8b8b3; --rule:#ebebe5; --rule-strong:#d4d4ce; --credit:#c2671f; }
+.theme-ink   { --bg:#111; --bg-2:#1a1a1a; --bg-3:#232323; --ink:#f4f4f4; --ink-2:#b8b8b8; --ink-3:#777; --ink-4:#4a4a4a; --rule:#2a2a2a; --rule-strong:#3a3a3a; --credit:#e8924a; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
@@ -210,6 +211,10 @@ a:hover { border-bottom-color: var(--ink); }
 .bill-amt { font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; word-break: keep-all; }
 .bill-amt .amt-cur { color: var(--ink-3); margin-right: 2px; }
 .bill-amt.unset { color: var(--ink-4); font-style: italic; }
+.bill.credit-bill:not(.paid) .bill-amt .amt-num,
+.bill.credit-bill:not(.paid) .bill-amt .amt-cur { color: var(--credit); }
+.credit-lbl { color: var(--credit) !important; }
+.credit-num { color: var(--credit); }
 .amt-input {
   font-family: var(--mono); width: 110px;
   background: var(--bg); border: 1px solid var(--ink); border-radius: 0;
@@ -224,7 +229,7 @@ a:hover { border-bottom-color: var(--ink); }
   color: var(--ink-2); cursor: pointer; font-family: var(--mono); min-width: 60px;
 }
 .chip-cash { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.chip-credit { background: transparent; color: var(--ink-2); border-color: var(--rule-strong); }
+.chip-credit { background: var(--credit); color: #fff; border-color: var(--credit); }
 
 .mark {
   appearance: none; border: 0; background: transparent; cursor: pointer;
@@ -361,14 +366,16 @@ a:hover { border-bottom-color: var(--ink); }
 }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
 @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
-.form-row { display: flex; flex-direction: column; gap: 4px; }
+.form-row { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .form-row.full { grid-column: 1 / -1; }
 .form-lbl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
 .form-row input:not([type="radio"]):not([type="checkbox"]),
 .form-row select, .form-row textarea {
   font: inherit; font-size: 16px; padding: 6px 9px; border: 1px solid var(--rule-strong);
-  background: var(--bg); border-radius: 0; color: var(--ink); font-family: var(--mono); width: 100%;
+  background: var(--bg); border-radius: 0; color: var(--ink); font-family: var(--mono);
+  width: 100%; min-width: 0; max-width: 100%;
 }
+.form-row input[type="date"] { -webkit-appearance: none; appearance: none; }
 .form-row input:not([type="radio"]):not([type="checkbox"]):focus,
 .form-row select:focus, .form-row textarea:focus {
   outline: 1px solid var(--ink); outline-offset: -1px; border-color: var(--ink);
@@ -496,6 +503,7 @@ const DEFAULT_STATE = {
   settings: {
     grouping: 'due',
     horizon: 3,
+    forecastMode: 'cashflow',
     bufferTarget: 3000,
     savingsSplit: 40,
     theme: 'paper',
@@ -650,7 +658,7 @@ function BillRow({ bill, paidState, onTogglePaid, onSetAmount, onSetMethod, onEd
   };
 
   return (
-    <div className={`bill ${paid ? 'paid' : ''}`}>
+    <div className={`bill ${paid ? 'paid' : ''} ${method === 'credit' ? 'credit-bill' : ''}`}>
       <div className="bill-main" onClick={() => setOpen(o => !o)}>
         <div className="bill-mark-cell" onClick={e => e.stopPropagation()}>
           <PaidMark paid={paid} onClick={() => onTogglePaid(bill)} />
@@ -956,6 +964,76 @@ function ForecastStrip({ horizon, onHorizon, periods, computeNet, current }) {
   );
 }
 
+// ── Savings growth chart (cumulative projected savings) ──────────────────────
+function SavingsChart({ rows, height = 140 }) {
+  const maxSav = Math.max(...rows.map(r => r.savings), 1);
+  const w = 100 / Math.max(rows.length, 1);
+  const monthsShown = 3;
+  return (
+    <div className="chart" style={{ height }}>
+      <div className="chart-grid"><div className="grid-line zero" style={{ top: 'auto', bottom: 18 }} /></div>
+      {rows.length > 1 && (
+        <svg className="chart-line" viewBox={`0 0 ${rows.length * 100} 100`} preserveAspectRatio="none">
+          <polyline
+            points={rows.map((r, i) => `${i * 100 + 50},${100 - (r.savings / maxSav) * 92 - 4}`).join(' ')}
+            fill="none" stroke="currentColor" strokeWidth="1.5"
+            vectorEffect="non-scaling-stroke" opacity="0.45" />
+        </svg>
+      )}
+      <div className="chart-bars">
+        {rows.map((r, i) => {
+          const h = (r.savings / maxSav) * 90;
+          return (
+            <div className="bar-col" key={i} style={{ width: `${w}%` }}
+              title={`${r.period.label}: ${money(r.savings)} saved`}>
+              <div className="bar pos" style={{ height: `${h}%`, bottom: 0 }} />
+              {i % Math.max(1, Math.ceil(rows.length / Math.min(monthsShown * 2, rows.length))) === 0 && (
+                <div className="bar-lbl">{shortDate(r.period.start)}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Savings growth strip ─────────────────────────────────────────────────────
+function SavingsStrip({ horizon, onHorizon, periods, projectSavings, current }) {
+  const horizons = [
+    { id: 1, label: '1 mo', periods: 2 },
+    { id: 3, label: '3 mo', periods: 6 },
+    { id: 6, label: '6 mo', periods: 13 },
+    { id: 12, label: '12 mo', periods: 26 },
+  ];
+  const sel = horizons.find(h => h.id === horizon) || horizons[1];
+  const slice = periods.slice(current, current + sel.periods);
+  const rows = projectSavings(slice);
+  const last = rows[rows.length - 1];
+  const totalSaved = last?.savings || 0;
+  const totalDebt = last?.debtPaid || 0;
+  return (
+    <div className="forecast">
+      <div className="forecast-head">
+        <div>
+          <div className="income-lbl">Projected savings</div>
+          <div className="forecast-num">{money(totalSaved)}</div>
+          <div className="income-sub">
+            + {money(totalDebt)} to debt · through {slice[slice.length - 1]?.label.split(' – ')[1] || '—'}
+          </div>
+        </div>
+        <div className="horizon-pick">
+          {horizons.map(h => (
+            <button key={h.id} className={h.id === horizon ? 'on' : ''}
+              onClick={() => onHorizon(h.id)}>{h.label}</button>
+          ))}
+        </div>
+      </div>
+      <SavingsChart rows={rows} height={120} />
+    </div>
+  );
+}
+
 // ── Main App ────────────────────────────────────────────────────────────────
 function App() {
   const initial = useMemo(() => {
@@ -1041,13 +1119,16 @@ function App() {
 
   const available = checking + paycheck + extrasTotal;
   const billsTotal = allBills.reduce((s, b) => s + (b.amount || 0), 0);
+  const cashBillsTotal = allBills.filter(b => b.method === 'cash').reduce((s, b) => s + (b.amount || 0), 0);
+  const creditBillsTotal = billsTotal - cashBillsTotal;
+  const cashBillsCount = allBills.filter(b => b.method === 'cash').length;
+  const creditBillsCount = allBills.length - cashBillsCount;
   const paidTotal = allBills.reduce((s, b) => {
     const k = `${b.id}::${period.id}`;
     return s + (paid[k]?.paid ? (paid[k].amount ?? b.amount ?? 0) : 0);
   }, 0);
-  const afterBills = available - billsTotal;
-  const cashBillsTotal = allBills.filter(b => b.method === 'cash').reduce((s, b) => s + (b.amount || 0), 0);
-  const creditBillsTotal = billsTotal - cashBillsTotal;
+  // Only cash leaves checking this period; credit is paid back via the card.
+  const afterBills = available - cashBillsTotal;
 
   const bufferAlloc = Math.max(0, Math.min(settings.bufferTarget, afterBills));
   const bufferShort = Math.max(0, settings.bufferTarget - afterBills);
@@ -1055,13 +1136,61 @@ function App() {
   const savingsAlloc = allocPool * (settings.savingsSplit / 100);
   const debtAlloc = allocPool - savingsAlloc;
 
-  const computeNet = useCallback((p) => {
-    const inc = (incomeByPeriod[p.id]?.paycheck || 0)
-      + extrasInPeriod(p).reduce((s, e) => s + (e.amount || 0), 0);
-    const periodBills = billsForPeriod(bills, p);
-    const cost = periodBills.reduce((s, b) => s + (b.amount || 0), 0);
-    return inc - cost;
-  }, [bills, incomeByPeriod, extrasInPeriod]);
+  // Estimated paycheck for forecasting future periods: use the current period's
+  // paycheck, else the most recent prior entered value, else any entered value.
+  const estimatedPaycheck = useMemo(() => {
+    const curId = payPeriods[currentPeriodIndex]?.id;
+    if (incomeByPeriod[curId]?.paycheck) return incomeByPeriod[curId].paycheck;
+    let best = 0;
+    for (let i = 0; i <= currentPeriodIndex && i < payPeriods.length; i++) {
+      const pc = incomeByPeriod[payPeriods[i]?.id]?.paycheck;
+      if (pc) best = pc;
+    }
+    if (best) return best;
+    for (let i = 0; i < payPeriods.length; i++) {
+      const pc = incomeByPeriod[payPeriods[i]?.id]?.paycheck;
+      if (pc) return pc;
+    }
+    return 0;
+  }, [incomeByPeriod, payPeriods, currentPeriodIndex]);
+
+  // Income estimate for a period: explicit paycheck if set, else the estimate,
+  // plus any manually-added extra income that lands in that period.
+  const estIncomeForPeriod = useCallback((p) => {
+    const explicit = incomeByPeriod[p.id]?.paycheck;
+    const base = (explicit != null && explicit !== 0) ? explicit : estimatedPaycheck;
+    const extras = extrasInPeriod(p).reduce((s, e) => s + (e.amount || 0), 0);
+    return base + extras;
+  }, [incomeByPeriod, estimatedPaycheck, extrasInPeriod]);
+
+  const cashBillsForPeriod = useCallback((p) =>
+    billsForPeriod(bills, p).filter(b => b.method === 'cash').reduce((s, b) => s + (b.amount || 0), 0),
+    [bills]);
+
+  // Cash-flow net for a period = estimated income − cash bills (credit is deferred).
+  const computeNet = useCallback((p) => estIncomeForPeriod(p) - cashBillsForPeriod(p),
+    [estIncomeForPeriod, cashBillsForPeriod]);
+
+  // Project savings accumulation across periods using the buffer/split rules.
+  // Starts from the current period's checking balance, runs the same allocation
+  // each period: refill buffer first, then split the excess by savingsSplit%.
+  const projectSavings = useCallback((periods) => {
+    let checkingBal = checking;
+    let savings = 0, debtPaid = 0;
+    return periods.map(p => {
+      checkingBal += estIncomeForPeriod(p) - cashBillsForPeriod(p);
+      let savingsAdd = 0, debtAdd = 0;
+      if (checkingBal > settings.bufferTarget) {
+        const excess = checkingBal - settings.bufferTarget;
+        savingsAdd = excess * (settings.savingsSplit / 100);
+        debtAdd = excess - savingsAdd;
+        checkingBal = settings.bufferTarget;
+      }
+      savings += savingsAdd;
+      debtPaid += debtAdd;
+      return { period: p, savings, debtPaid, checking: checkingBal, savingsAdd, debtAdd };
+    });
+  }, [checking, estIncomeForPeriod, cashBillsForPeriod, settings.bufferTarget, settings.savingsSplit]);
 
   const groupedBills = useMemo(() => {
     if (settings.grouping === 'category') {
@@ -1307,9 +1436,15 @@ function App() {
             <span className="math-num">${moneyPlain(available)}</span>
           </div>
           <div className="math-line">
-            <span className="math-lbl">Bills due ({allBills.length})</span>
-            <span className="math-num muted">−${moneyPlain(billsTotal)}</span>
+            <span className="math-lbl">Cash bills due ({cashBillsCount})</span>
+            <span className="math-num muted">−${moneyPlain(cashBillsTotal)}</span>
           </div>
+          {creditBillsTotal > 0 && (
+            <div className="math-line" style={{ paddingLeft: 14, borderBottom: 0, paddingTop: 4, paddingBottom: 4 }}>
+              <span className="math-lbl credit-lbl" style={{ fontSize: 10 }}>· credit ({creditBillsCount}) · paid via card</span>
+              <span className="math-num credit-num" style={{ fontSize: 13 }}>${moneyPlain(creditBillsTotal)}</span>
+            </div>
+          )}
           {paidTotal > 0 && (
             <div className="math-line" style={{ paddingLeft: 14, borderBottom: 0, paddingTop: 4, paddingBottom: 4 }}>
               <span className="math-lbl" style={{ fontSize: 10 }}>· paid so far</span>
@@ -1317,7 +1452,7 @@ function App() {
             </div>
           )}
           <div className="math-line total">
-            <span className="math-lbl">After bills</span>
+            <span className="math-lbl">Cash left over</span>
             <span className={`math-num lg ${afterBills < 0 ? 'muted' : ''}`}>
               {afterBills < 0 ? '−' : ''}${moneyPlain(afterBills)}
             </span>
@@ -1450,14 +1585,33 @@ function App() {
         <section className="section">
           <div className="section-head">
             <div className="section-title">Forecast</div>
-            <div className="section-meta">net per pay period · cumulative line</div>
+            <div className="section-tabs">
+              <button className={settings.forecastMode !== 'savings' ? 'on' : ''}
+                onClick={() => setSettings(s => ({ ...s, forecastMode: 'cashflow' }))}>Cash flow</button>
+              <button className={settings.forecastMode === 'savings' ? 'on' : ''}
+                onClick={() => setSettings(s => ({ ...s, forecastMode: 'savings' }))}>Savings growth</button>
+            </div>
           </div>
-          <ForecastStrip
-            horizon={settings.horizon}
-            onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
-            periods={payPeriods}
-            computeNet={computeNet}
-            current={periodIdx} />
+          <div className="section-meta" style={{ marginTop: -8, marginBottom: 16 }}>
+            {settings.forecastMode === 'savings'
+              ? `projected savings · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`
+              : `net per pay period · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`}
+          </div>
+          {settings.forecastMode === 'savings' ? (
+            <SavingsStrip
+              horizon={settings.horizon}
+              onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
+              periods={payPeriods}
+              projectSavings={projectSavings}
+              current={periodIdx} />
+          ) : (
+            <ForecastStrip
+              horizon={settings.horizon}
+              onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
+              periods={payPeriods}
+              computeNet={computeNet}
+              current={periodIdx} />
+          )}
         </section>
       )}
 
