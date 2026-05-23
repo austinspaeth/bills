@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>Bills — paper ledger</title>
+<meta name="theme-color" content="#111111" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="apple-mobile-web-app-title" content="Bills" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -93,6 +98,7 @@ a:hover { border-bottom-color: var(--ink); }
 .income-cell:last-child { border-right: 0; background: var(--ink); color: var(--bg); }
 .income-cell:last-child .income-lbl { color: var(--bg-3); }
 .income-lbl { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.est-tag { margin-left: 8px; border: 1px solid var(--ink-4); padding: 0 4px; font-size: 8px; letter-spacing: .12em; color: var(--ink-3); border-radius: 0; }
 .income-num { font-size: 32px; font-weight: 500; letter-spacing: -.02em; display: flex; align-items: baseline; gap: 4px; }
 .income-num .cur { font-size: 18px; color: var(--ink-3); font-weight: 400; }
 .income-cell:last-child .income-num .cur { color: var(--bg-3); }
@@ -165,6 +171,19 @@ a:hover { border-bottom-color: var(--ink); }
 .tile-num { font-size: 22px; font-weight: 500; margin-top: 6px; letter-spacing: -.02em; }
 .tile-sub { font-size: 10.5px; color: var(--ink-3); margin-top: 4px; letter-spacing: .02em; }
 
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 28px; border: 1px solid var(--rule-strong); }
+@media (max-width: 720px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+.metric-card { padding: 16px 18px; border-right: 1px solid var(--rule); }
+.metric-card:last-child { border-right: 0; }
+@media (max-width: 720px) {
+  .metric-card { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .metric-card:nth-child(odd) { border-right: 1px solid var(--rule); }
+  .metric-card:nth-last-child(-n+2) { border-bottom: 0; }
+}
+.metric-lbl { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.metric-num { font-size: 20px; font-weight: 500; margin-top: 6px; letter-spacing: -.02em; }
+.metric-sub { font-size: 10px; color: var(--ink-3); margin-top: 4px; letter-spacing: .02em; }
+
 .bill-group { margin-bottom: 20px; }
 .bill-group-head {
   font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3);
@@ -236,13 +255,12 @@ a:hover { border-bottom-color: var(--ink); }
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; font-family: var(--mono); color: var(--ink-2); padding: 0;
 }
-.mark-stamp { width: 22px; height: 22px; position: relative; }
-.mark-stamp .stamp-empty { width: 16px; height: 16px; border: 1px solid var(--ink-3); border-radius: 0; display: inline-block; }
-.mark-stamp .stamp-text {
-  font-family: var(--mono); font-weight: 600; font-size: 9px; letter-spacing: .06em;
-  color: var(--ink); border: 1px solid var(--ink); padding: 1px 3px;
-  transform: rotate(-6deg); display: inline-block;
+.mark-check {
+  width: 18px; height: 18px; border: 1px solid var(--ink-3); border-radius: 50%;
+  color: var(--ink); transition: background .12s, border-color .12s;
 }
+.mark-check.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.mark-check:hover { border-color: var(--ink); }
 
 .bill-detail {
   background: var(--bg-2); border-top: 1px solid var(--rule);
@@ -288,29 +306,21 @@ a:hover { border-bottom-color: var(--ink); }
 }
 .horizon-pick button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); position: relative; z-index: 1; }
 
-.chart { position: relative; width: 100%; padding-bottom: 18px; }
-.chart-grid { position: absolute; inset: 0; bottom: 18px; }
+.chart { position: relative; width: 100%; padding-bottom: 32px; }
+.chart-grid { position: absolute; inset: 0; bottom: 32px; }
 .grid-line.zero { position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--rule-strong); }
-.chart-line { position: absolute; left: 0; right: 0; top: 0; bottom: 18px; width: 100%; height: calc(100% - 18px); color: var(--ink-3); pointer-events: none; }
-.chart-bars { position: absolute; left: 0; right: 0; top: 0; bottom: 18px; display: flex; align-items: stretch; }
+.chart-line { position: absolute; left: 0; right: 0; top: 0; bottom: 32px; width: 100%; height: calc(100% - 32px); color: var(--ink-3); pointer-events: none; }
+.chart-bars { position: absolute; left: 0; right: 0; top: 0; bottom: 32px; display: flex; align-items: stretch; }
 .bar-col { position: relative; height: 100%; }
 .bar { position: absolute; left: 25%; right: 25%; background: var(--ink); min-height: 1px; }
 .bar.neg { background: var(--ink-3); }
 .bar-lbl {
-  position: absolute; bottom: -16px; left: 0; right: 0; text-align: center;
-  font-size: 9px; color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase;
+  position: absolute; bottom: -30px; left: -10px; right: -10px; text-align: center;
+  display: flex; flex-direction: column; gap: 1px;
 }
+.bar-lbl .bl-date { font-size: 9px; color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; }
+.bar-lbl .bl-amt { font-size: 10px; color: var(--ink); font-variant-numeric: tabular-nums; }
 
-.events-list { display: flex; flex-direction: column; }
-.event-row {
-  display: grid; grid-template-columns: 90px 1fr auto; gap: 16px; align-items: baseline;
-  padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 13px;
-}
-.event-date { font-size: 11px; color: var(--ink-3); letter-spacing: .04em; text-transform: uppercase; }
-.event-name { font-size: 13px; }
-.event-name .e-note { color: var(--ink-3); font-size: 10.5px; margin-left: 10px; }
-.event-amt { font-size: 14px; white-space: nowrap; }
-.event-amt.minus { color: var(--ink-2); }
 
 .add-quick-collapsed {
   text-align: center; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
@@ -458,6 +468,51 @@ a:hover { border-bottom-color: var(--ink); }
       }
     } catch(e) {}
   </script>
+  <script>
+    /* Money-bag favicon + PWA icons (black bg, thin white outline). Built at
+       runtime so the whole app stays a single self-contained file. */
+    (function () {
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        + '<rect width="100" height="100" rx="18" fill="#111111"/>'
+        + '<g fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round">'
+        + '<path d="M38 31 L34 18 Q50 25 66 18 L62 31"/>'
+        + '<path d="M38 31 C27 39 20 52 20 65 C20 81 34 90 50 90 C66 90 80 81 80 65 C80 52 73 39 62 31 Z"/>'
+        + '</g>'
+        + '<text x="50" y="70" text-anchor="middle" font-family="Georgia,\'Times New Roman\',serif" font-size="34" font-weight="700" fill="#ffffff">$</text>'
+        + '</svg>';
+      const svgUri = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+      const setLink = (rel, attrs) => {
+        let el = document.querySelector('link[rel="' + rel + '"]');
+        if (!el) { el = document.createElement('link'); el.rel = rel; document.head.appendChild(el); }
+        Object.assign(el, attrs);
+        return el;
+      };
+      setLink('icon', { type: 'image/svg+xml', href: svgUri });
+      try {
+        const img = new Image();
+        img.onload = function () {
+          const png = (size) => {
+            const c = document.createElement('canvas'); c.width = c.height = size;
+            c.getContext('2d').drawImage(img, 0, 0, size, size);
+            return c.toDataURL('image/png');
+          };
+          setLink('apple-touch-icon', { href: png(180) });
+          const manifest = {
+            name: 'Bills — ledger', short_name: 'Bills',
+            display: 'standalone', background_color: '#111111', theme_color: '#111111',
+            start_url: '.', scope: '.',
+            icons: [
+              { src: png(192), sizes: '192x192', type: 'image/png', purpose: 'any' },
+              { src: png(512), sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+            ],
+          };
+          const url = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' }));
+          setLink('manifest', { href: url });
+        };
+        img.src = svgUri;
+      } catch (e) {}
+    })();
+  </script>
   <div id="root"></div>
   <input type="file" id="import-file" accept="application/json" style="display:none" />
 
@@ -472,6 +527,13 @@ const STORAGE_KEY = 'bills.v1';
 // ── Formatting helpers ──────────────────────────────────────────────────────
 const moneyPlain = (n) => Math.abs(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const money = (n) => (n < 0 ? '−' : '') + '$' + moneyPlain(n);
+const moneyCompact = (n) => {
+  const v = n || 0;
+  const sign = v < 0 ? '−' : '';
+  const abs = Math.abs(v);
+  if (abs >= 1000) return sign + '$' + (abs / 1000).toFixed(abs >= 10000 ? 0 : 1) + 'k';
+  return sign + '$' + Math.round(abs);
+};
 const shortDate = (d) => d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
 const dayNum = (d) => d.getDate();
 const monthShort = (d) => d.toLocaleString('en-US', { month: 'short' });
@@ -622,12 +684,17 @@ function NumericInput({ value, onChange, className, ...rest }) {
   );
 }
 
-// ── Paid Mark (stamp style) ─────────────────────────────────────────────────
+// ── Paid Mark (checkmark) ────────────────────────────────────────────────────
 function PaidMark({ paid, onClick }) {
   return (
-    <button className={`mark mark-stamp ${paid ? 'on' : 'off'}`} onClick={onClick}
+    <button className={`mark mark-check ${paid ? 'on' : 'off'}`} onClick={onClick}
       aria-label={paid ? 'Mark unpaid' : 'Mark paid'}>
-      {paid ? <span className="stamp-text">PAID</span> : <span className="stamp-empty" />}
+      {paid && (
+        <svg viewBox="0 0 14 14" width="11" height="11">
+          <path d="M2 7.5 L5.5 11 L12 3.5" stroke="currentColor" strokeWidth="2"
+            fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
     </button>
   );
 }
@@ -923,7 +990,10 @@ function CashflowChart({ periods, computeNet, height = 140 }) {
               <div className={`bar ${positive ? 'pos' : 'neg'}`}
                 style={{ height: `${h}%`, [positive ? 'bottom' : 'top']: '50%' }} />
               {i % Math.max(1, Math.ceil(data.length / Math.min(monthsShown * 2, data.length))) === 0 && (
-                <div className="bar-lbl">{shortDate(d.period.start)}</div>
+                <div className="bar-lbl">
+                  <span className="bl-date">{shortDate(d.period.start)}</span>
+                  <span className="bl-amt">{moneyCompact(d.net)}</span>
+                </div>
               )}
             </div>
           );
@@ -988,7 +1058,10 @@ function SavingsChart({ rows, height = 140 }) {
               title={`${r.period.label}: ${money(r.savings)} saved`}>
               <div className="bar pos" style={{ height: `${h}%`, bottom: 0 }} />
               {i % Math.max(1, Math.ceil(rows.length / Math.min(monthsShown * 2, rows.length))) === 0 && (
-                <div className="bar-lbl">{shortDate(r.period.start)}</div>
+                <div className="bar-lbl">
+                  <span className="bl-date">{shortDate(r.period.start)}</span>
+                  <span className="bl-amt">{moneyCompact(r.savings)}</span>
+                </div>
               )}
             </div>
           );
@@ -1097,44 +1170,7 @@ function App() {
   const allBills = useMemo(() => billsForPeriod(bills, period), [bills, period]);
   const nextBills = useMemo(() => nextPeriod ? billsForPeriod(bills, nextPeriod) : [], [bills, nextPeriod]);
 
-  // Per-period paycheck & checking — unique to each pay period
-  const periodIncome = incomeByPeriod[period.id] || {};
-  const paycheck = periodIncome.paycheck || 0;
-  const checking = periodIncome.checking || 0;
-  const setPaycheck = (v) => setIncomeByPeriod(m => ({
-    ...m, [period.id]: { ...(m[period.id] || {}), paycheck: v }
-  }));
-  const setChecking = (v) => setIncomeByPeriod(m => ({
-    ...m, [period.id]: { ...(m[period.id] || {}), checking: v }
-  }));
-
-  const extrasInPeriod = useCallback((p) => incomeEvents.filter(e => {
-    if (!e.date) return false;
-    const d = parseISO(e.date);
-    return d >= p.start && d <= p.end;
-  }), [incomeEvents]);
-
-  const periodExtras = useMemo(() => extrasInPeriod(period), [extrasInPeriod, period]);
-  const extrasTotal = periodExtras.reduce((s, e) => s + (e.amount || 0), 0);
-
-  const available = checking + paycheck + extrasTotal;
-  const billsTotal = allBills.reduce((s, b) => s + (b.amount || 0), 0);
-  const cashBillsTotal = allBills.filter(b => b.method === 'cash').reduce((s, b) => s + (b.amount || 0), 0);
-  const creditBillsTotal = billsTotal - cashBillsTotal;
-  const cashBillsCount = allBills.filter(b => b.method === 'cash').length;
-  const creditBillsCount = allBills.length - cashBillsCount;
-  const paidTotal = allBills.reduce((s, b) => {
-    const k = `${b.id}::${period.id}`;
-    return s + (paid[k]?.paid ? (paid[k].amount ?? b.amount ?? 0) : 0);
-  }, 0);
-  // Only cash leaves checking this period; credit is paid back via the card.
-  const afterBills = available - cashBillsTotal;
-
-  const bufferAlloc = Math.max(0, Math.min(settings.bufferTarget, afterBills));
-  const bufferShort = Math.max(0, settings.bufferTarget - afterBills);
-  const allocPool = Math.max(0, afterBills - settings.bufferTarget);
-  const savingsAlloc = allocPool * (settings.savingsSplit / 100);
-  const debtAlloc = allocPool - savingsAlloc;
+  const isFuture = periodIdx > currentPeriodIndex;
 
   // Estimated paycheck for forecasting future periods: use the current period's
   // paycheck, else the most recent prior entered value, else any entered value.
@@ -1154,6 +1190,70 @@ function App() {
     return 0;
   }, [incomeByPeriod, payPeriods, currentPeriodIndex]);
 
+  // Per-period paycheck & checking — unique to each pay period. For future
+  // periods with no manual entry, default to the normal paycheck and the
+  // carried-over buffer, both flagged as estimated.
+  const periodIncome = incomeByPeriod[period.id] || {};
+  const manualPaycheck = periodIncome.paycheck;
+  const manualChecking = periodIncome.checking;
+  const paycheckEstimated = isFuture && !manualPaycheck;
+  const checkingEstimated = isFuture && manualChecking == null;
+  const paycheck = paycheckEstimated ? estimatedPaycheck : (manualPaycheck || 0);
+  const checking = checkingEstimated ? settings.bufferTarget : (manualChecking || 0);
+  const setPaycheck = (v) => setIncomeByPeriod(m => ({
+    ...m, [period.id]: { ...(m[period.id] || {}), paycheck: v }
+  }));
+  const setChecking = (v) => setIncomeByPeriod(m => ({
+    ...m, [period.id]: { ...(m[period.id] || {}), checking: v }
+  }));
+
+  const extrasInPeriod = useCallback((p) => incomeEvents.filter(e => {
+    if (!e.date) return false;
+    const d = parseISO(e.date);
+    return d >= p.start && d <= p.end;
+  }), [incomeEvents]);
+
+  const periodExtras = useMemo(() => extrasInPeriod(period), [extrasInPeriod, period]);
+  const extrasTotal = periodExtras.reduce((s, e) => s + (e.amount || 0), 0);
+
+  // A bill instance paid ahead from a different period doesn't draw on this period.
+  const paidAheadElsewhere = (billId, periodId) => {
+    const rec = paid[`${billId}::${periodId}`];
+    return !!(rec?.paid && rec.paidFromPeriod && rec.paidFromPeriod !== periodId);
+  };
+  // Cash paid ahead OUT of this period for bills that live in other periods.
+  const prepaidOut = useMemo(() => {
+    let sum = 0;
+    Object.entries(paid).forEach(([key, rec]) => {
+      if (!rec?.paid || rec.method !== 'cash' || rec.paidFromPeriod !== period.id) return;
+      const pid = key.slice(key.indexOf('::') + 2);
+      if (pid !== period.id) sum += (rec.amount || 0);
+    });
+    return sum;
+  }, [paid, period.id]);
+
+  const available = checking + paycheck + extrasTotal;
+  const billsTotal = allBills.reduce((s, b) => s + (b.amount || 0), 0);
+  const cashBillsTotal = allBills
+    .filter(b => b.method === 'cash' && !paidAheadElsewhere(b.id, period.id))
+    .reduce((s, b) => s + (b.amount || 0), 0);
+  const creditBillsTotal = allBills.filter(b => b.method === 'credit').reduce((s, b) => s + (b.amount || 0), 0);
+  const cashBillsCount = allBills.filter(b => b.method === 'cash' && !paidAheadElsewhere(b.id, period.id)).length;
+  const creditBillsCount = allBills.filter(b => b.method === 'credit').length;
+  const paidTotal = allBills.reduce((s, b) => {
+    const k = `${b.id}::${period.id}`;
+    return s + (paid[k]?.paid ? (paid[k].amount ?? b.amount ?? 0) : 0);
+  }, 0);
+  // Only cash leaves checking this period; credit is paid back via the card.
+  // Bills paid ahead from this period also draw down this period's cash.
+  const afterBills = available - cashBillsTotal - prepaidOut;
+
+  const bufferAlloc = Math.max(0, Math.min(settings.bufferTarget, afterBills));
+  const bufferShort = Math.max(0, settings.bufferTarget - afterBills);
+  const allocPool = Math.max(0, afterBills - settings.bufferTarget);
+  const savingsAlloc = allocPool * (settings.savingsSplit / 100);
+  const debtAlloc = allocPool - savingsAlloc;
+
   // Income estimate for a period: explicit paycheck if set, else the estimate,
   // plus any manually-added extra income that lands in that period.
   const estIncomeForPeriod = useCallback((p) => {
@@ -1171,11 +1271,15 @@ function App() {
   const computeNet = useCallback((p) => estIncomeForPeriod(p) - cashBillsForPeriod(p),
     [estIncomeForPeriod, cashBillsForPeriod]);
 
+  // Checking balance to anchor projections — always the current period's, so
+  // the forecast reflects "right now" regardless of which period is on screen.
+  const currentChecking = incomeByPeriod[payPeriods[currentPeriodIndex]?.id]?.checking || 0;
+
   // Project savings accumulation across periods using the buffer/split rules.
   // Starts from the current period's checking balance, runs the same allocation
   // each period: refill buffer first, then split the excess by savingsSplit%.
   const projectSavings = useCallback((periods) => {
-    let checkingBal = checking;
+    let checkingBal = currentChecking;
     let savings = 0, debtPaid = 0;
     return periods.map(p => {
       checkingBal += estIncomeForPeriod(p) - cashBillsForPeriod(p);
@@ -1190,7 +1294,58 @@ function App() {
       debtPaid += debtAdd;
       return { period: p, savings, debtPaid, checking: checkingBal, savingsAdd, debtAdd };
     });
-  }, [checking, estIncomeForPeriod, cashBillsForPeriod, settings.bufferTarget, settings.savingsSplit]);
+  }, [currentChecking, estIncomeForPeriod, cashBillsForPeriod, settings.bufferTarget, settings.savingsSplit]);
+
+  // Trailing-3-month averages (current month + 2 prior). Cost is always
+  // computable from recurring bills; income/saved/debt only count months that
+  // actually have an entered paycheck. "Use what data is available."
+  const metrics = useMemo(() => {
+    const monthsBack = [0, 1, 2].map(i => {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      return { y: d.getFullYear(), m: d.getMonth() };
+    });
+    const costForMonth = (y, m) => bills.reduce((s, b) => {
+      if (b.recurring) return s + (b.amount || 0);
+      if (b.date) { const d = parseISO(b.date); if (d.getFullYear() === y && d.getMonth() === m) return s + (b.amount || 0); }
+      return s;
+    }, 0);
+    const incomeForMonth = (y, m) => {
+      let sum = 0, has = false;
+      payPeriods.forEach(p => {
+        if (p.payDate.getFullYear() === y && p.payDate.getMonth() === m) {
+          const pc = incomeByPeriod[p.id]?.paycheck;
+          if (pc != null && pc > 0) { sum += pc; has = true; }
+        }
+      });
+      incomeEvents.forEach(e => {
+        if (!e.date) return; const d = parseISO(e.date);
+        if (d.getFullYear() === y && d.getMonth() === m) sum += (e.amount || 0);
+      });
+      return { sum, has };
+    };
+    const costs = monthsBack.map(mo => costForMonth(mo.y, mo.m));
+    const incomes = monthsBack.map(mo => incomeForMonth(mo.y, mo.m));
+    const avgCost = costs.reduce((s, c) => s + c, 0) / costs.length;
+    const incomeMonths = monthsBack.filter((_, i) => incomes[i].has);
+    const avgIncome = incomeMonths.length
+      ? monthsBack.reduce((s, _, i) => s + (incomes[i].has ? incomes[i].sum : 0), 0) / incomeMonths.length
+      : null;
+    let savedSum = 0, debtSum = 0;
+    monthsBack.forEach((_, i) => {
+      if (!incomes[i].has) return;
+      const surplus = Math.max(0, incomes[i].sum - costs[i]);
+      savedSum += surplus * (settings.savingsSplit / 100);
+      debtSum += surplus * (1 - settings.savingsSplit / 100);
+    });
+    const n = incomeMonths.length;
+    return {
+      avgCost,
+      avgIncome,
+      avgSaved: n ? savedSum / n : null,
+      avgDebt: n ? debtSum / n : null,
+      incomeMonthCount: n,
+    };
+  }, [bills, payPeriods, incomeByPeriod, incomeEvents, settings.savingsSplit, today]);
 
   const groupedBills = useMemo(() => {
     if (settings.grouping === 'category') {
@@ -1222,6 +1377,17 @@ function App() {
       [k]: p[k]?.paid
         ? { ...p[k], paid: false }
         : { paid: true, amount: bill.amount ?? 0, method: bill.method, date: fmtISO(today) },
+    }));
+  };
+  // Pay a future-period bill now: mark it paid in its own (target) period,
+  // but record that the cash came out of the period currently being viewed.
+  const togglePayAhead = (bill, targetPeriod) => {
+    const k = `${bill.id}::${targetPeriod.id}`;
+    setPaid(p => ({
+      ...p,
+      [k]: p[k]?.paid
+        ? { ...p[k], paid: false }
+        : { paid: true, amount: bill.amount ?? 0, method: bill.method, date: fmtISO(today), paidFromPeriod: period.id },
     }));
   };
   const setAmount = (bill, amt) => {
@@ -1352,14 +1518,16 @@ function App() {
       {/* Income block */}
       <section className="income">
         <div className="income-cell">
-          <div className="income-lbl">Paycheck</div>
+          <div className="income-lbl">Paycheck{paycheckEstimated && <span className="est-tag">est</span>}</div>
           <div className="income-num">
             <span className="cur">$</span>
             <NumericInput className="income-input" type="number" step="0.01"
               value={paycheck} onChange={setPaycheck} />
           </div>
           <div className="income-sub">
-            {extrasTotal > 0
+            {paycheckEstimated
+              ? <>estimated · normal paycheck</>
+              : extrasTotal > 0
               ? <>+ ${moneyPlain(extrasTotal)} extra · {periodExtras.map(e => e.name).join(', ')}</>
               : <>biweekly · {showAnchor
                   ? <input type="date" value={payAnchor} onChange={e => setPayAnchor(e.target.value)}
@@ -1369,13 +1537,13 @@ function App() {
           </div>
         </div>
         <div className="income-cell">
-          <div className="income-lbl">Checking now</div>
+          <div className="income-lbl">Checking now{checkingEstimated && <span className="est-tag">est</span>}</div>
           <div className="income-num">
             <span className="cur">$</span>
             <NumericInput className="income-input" type="number" step="0.01"
               value={checking} onChange={setChecking} />
           </div>
-          <div className="income-sub">enter your current balance</div>
+          <div className="income-sub">{checkingEstimated ? <>estimated · carried buffer</> : <>enter your current balance</>}</div>
         </div>
         <div className="income-cell">
           <div className="income-lbl">Available</div>
@@ -1443,6 +1611,12 @@ function App() {
             <div className="math-line" style={{ paddingLeft: 14, borderBottom: 0, paddingTop: 4, paddingBottom: 4 }}>
               <span className="math-lbl credit-lbl" style={{ fontSize: 10 }}>· credit ({creditBillsCount}) · paid via card</span>
               <span className="math-num credit-num" style={{ fontSize: 13 }}>${moneyPlain(creditBillsTotal)}</span>
+            </div>
+          )}
+          {prepaidOut > 0 && (
+            <div className="math-line">
+              <span className="math-lbl">Paid ahead</span>
+              <span className="math-num muted">−${moneyPlain(prepaidOut)}</span>
             </div>
           )}
           {paidTotal > 0 && (
@@ -1594,8 +1768,8 @@ function App() {
           </div>
           <div className="section-meta" style={{ marginTop: -8, marginBottom: 16 }}>
             {settings.forecastMode === 'savings'
-              ? `projected savings · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`
-              : `net per pay period · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`}
+              ? `projected savings from today · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`
+              : `net per pay period from today · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`}
           </div>
           {settings.forecastMode === 'savings' ? (
             <SavingsStrip
@@ -1603,15 +1777,39 @@ function App() {
               onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
               periods={payPeriods}
               projectSavings={projectSavings}
-              current={periodIdx} />
+              current={currentPeriodIndex} />
           ) : (
             <ForecastStrip
               horizon={settings.horizon}
               onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
               periods={payPeriods}
               computeNet={computeNet}
-              current={periodIdx} />
+              current={currentPeriodIndex} />
           )}
+
+          {/* Trailing 3-month averages */}
+          <div className="metrics">
+            <div className="metric-card">
+              <div className="metric-lbl">Avg cost / mo</div>
+              <div className="metric-num">${moneyPlain(metrics.avgCost)}</div>
+              <div className="metric-sub">bills, last 3 months</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-lbl">Avg income / mo</div>
+              <div className="metric-num">{metrics.avgIncome == null ? '—' : `$${moneyPlain(metrics.avgIncome)}`}</div>
+              <div className="metric-sub">{metrics.incomeMonthCount ? `${metrics.incomeMonthCount} mo of data` : 'no income logged'}</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-lbl">Avg saved / mo</div>
+              <div className="metric-num">{metrics.avgSaved == null ? '—' : `$${moneyPlain(metrics.avgSaved)}`}</div>
+              <div className="metric-sub">{settings.savingsSplit}% of surplus</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-lbl">Avg debt paid / mo</div>
+              <div className="metric-num">{metrics.avgDebt == null ? '—' : `$${moneyPlain(metrics.avgDebt)}`}</div>
+              <div className="metric-sub">{Math.max(0, 100 - settings.savingsSplit)}% of surplus</div>
+            </div>
+          </div>
         </section>
       )}
 
@@ -1621,28 +1819,27 @@ function App() {
           <div className="section-head">
             <div className="section-title">Next period</div>
             <div className="section-meta">
-              {nextPeriod ? `${nextPeriod.label} · ${nextBills.length} bills · $${moneyPlain(nextBillsTotal)}` : '—'}
+              {nextPeriod ? `${nextPeriod.label} · ${nextBills.length} bills · $${moneyPlain(nextBillsTotal)} · tap ✓ to pay ahead` : '—'}
             </div>
           </div>
           {nextBills.length > 0 ? (
-            <div className="events-list">
+            <div className="bill-group">
               {nextBills.map(b => (
-                <div className="event-row" key={b.id}>
-                  <span className="event-date">
-                    {b.dueDate ? b.dueDate.toLocaleString('en-US', { month: 'short', day: 'numeric' }) : '—'}
-                  </span>
-                  <span className="event-name">
-                    {b.name}
-                    <span className="e-note">{CAT_LABEL[b.category]} · {b.method}</span>
-                  </span>
-                  <span className="event-amt minus">−${moneyPlain(b.amount || 0)}</span>
-                </div>
+                <BillRow key={b.id} bill={b}
+                  paidState={nextPeriod ? paid[`${b.id}::${nextPeriod.id}`] : null}
+                  onTogglePaid={(bill) => togglePayAhead(bill, nextPeriod)}
+                  onSetAmount={setAmount}
+                  onSetMethod={setMethod}
+                  onEdit={(bill) => {
+                    const original = bills.find(x => x.id === bill.id);
+                    setAddOpen(false);
+                    setEditingBill(original || bill);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  onDelete={deleteBill}
+                  showAcct={settings.showAccts}
+                  today={today} />
               ))}
-              <div className="event-row" style={{ borderBottom: 0, borderTop: '1px solid var(--ink)', paddingTop: 12, marginTop: 4 }}>
-                <span className="event-date">total</span>
-                <span></span>
-                <span className="event-amt" style={{ fontSize: 16, fontWeight: 500 }}>−${moneyPlain(nextBillsTotal)}</span>
-              </div>
             </div>
           ) : (
             <div style={{ color: 'var(--ink-3)', padding: 12, fontSize: 12 }}>No bills in next period.</div>
