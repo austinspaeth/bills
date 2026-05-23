@@ -171,6 +171,19 @@ a:hover { border-bottom-color: var(--ink); }
 .tile-num { font-size: 22px; font-weight: 500; margin-top: 6px; letter-spacing: -.02em; }
 .tile-sub { font-size: 10.5px; color: var(--ink-3); margin-top: 4px; letter-spacing: .02em; }
 
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 28px; border: 1px solid var(--rule-strong); }
+@media (max-width: 720px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+.metric-card { padding: 16px 18px; border-right: 1px solid var(--rule); }
+.metric-card:last-child { border-right: 0; }
+@media (max-width: 720px) {
+  .metric-card { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .metric-card:nth-child(odd) { border-right: 1px solid var(--rule); }
+  .metric-card:nth-last-child(-n+2) { border-bottom: 0; }
+}
+.metric-lbl { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.metric-num { font-size: 20px; font-weight: 500; margin-top: 6px; letter-spacing: -.02em; }
+.metric-sub { font-size: 10px; color: var(--ink-3); margin-top: 4px; letter-spacing: .02em; }
+
 .bill-group { margin-bottom: 20px; }
 .bill-group-head {
   font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3);
@@ -308,27 +321,6 @@ a:hover { border-bottom-color: var(--ink); }
 .bar-lbl .bl-date { font-size: 9px; color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; }
 .bar-lbl .bl-amt { font-size: 10px; color: var(--ink); font-variant-numeric: tabular-nums; }
 
-.events-list { display: flex; flex-direction: column; }
-.event-row {
-  display: grid; grid-template-columns: 90px 1fr auto; gap: 16px; align-items: baseline;
-  padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 13px;
-}
-.event-row-ahead { grid-template-columns: 76px 1fr auto 110px; gap: 14px; }
-@media (max-width: 600px) { .event-row-ahead { grid-template-columns: 60px 1fr auto; } }
-.event-date { font-size: 11px; color: var(--ink-3); letter-spacing: .04em; text-transform: uppercase; }
-.event-name { font-size: 13px; }
-.event-name .e-note { color: var(--ink-3); font-size: 10.5px; margin-left: 10px; }
-.event-amt { font-size: 14px; white-space: nowrap; }
-.event-amt.minus { color: var(--ink-2); }
-.event-row.ahead-on .event-name { color: var(--ink-3); text-decoration: var(--paid-decoration, none); }
-.ahead-btn {
-  appearance: none; border: 1px solid var(--rule-strong); background: transparent;
-  font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--ink-2); cursor: pointer; padding: 4px 8px; white-space: nowrap; justify-self: end;
-}
-.ahead-btn:hover { color: var(--ink); border-color: var(--ink); }
-.ahead-btn.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-@media (max-width: 600px) { .ahead-btn { display: none; } }
 
 .add-quick-collapsed {
   text-align: center; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
@@ -1279,11 +1271,15 @@ function App() {
   const computeNet = useCallback((p) => estIncomeForPeriod(p) - cashBillsForPeriod(p),
     [estIncomeForPeriod, cashBillsForPeriod]);
 
+  // Checking balance to anchor projections — always the current period's, so
+  // the forecast reflects "right now" regardless of which period is on screen.
+  const currentChecking = incomeByPeriod[payPeriods[currentPeriodIndex]?.id]?.checking || 0;
+
   // Project savings accumulation across periods using the buffer/split rules.
   // Starts from the current period's checking balance, runs the same allocation
   // each period: refill buffer first, then split the excess by savingsSplit%.
   const projectSavings = useCallback((periods) => {
-    let checkingBal = checking;
+    let checkingBal = currentChecking;
     let savings = 0, debtPaid = 0;
     return periods.map(p => {
       checkingBal += estIncomeForPeriod(p) - cashBillsForPeriod(p);
@@ -1298,7 +1294,58 @@ function App() {
       debtPaid += debtAdd;
       return { period: p, savings, debtPaid, checking: checkingBal, savingsAdd, debtAdd };
     });
-  }, [checking, estIncomeForPeriod, cashBillsForPeriod, settings.bufferTarget, settings.savingsSplit]);
+  }, [currentChecking, estIncomeForPeriod, cashBillsForPeriod, settings.bufferTarget, settings.savingsSplit]);
+
+  // Trailing-3-month averages (current month + 2 prior). Cost is always
+  // computable from recurring bills; income/saved/debt only count months that
+  // actually have an entered paycheck. "Use what data is available."
+  const metrics = useMemo(() => {
+    const monthsBack = [0, 1, 2].map(i => {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      return { y: d.getFullYear(), m: d.getMonth() };
+    });
+    const costForMonth = (y, m) => bills.reduce((s, b) => {
+      if (b.recurring) return s + (b.amount || 0);
+      if (b.date) { const d = parseISO(b.date); if (d.getFullYear() === y && d.getMonth() === m) return s + (b.amount || 0); }
+      return s;
+    }, 0);
+    const incomeForMonth = (y, m) => {
+      let sum = 0, has = false;
+      payPeriods.forEach(p => {
+        if (p.payDate.getFullYear() === y && p.payDate.getMonth() === m) {
+          const pc = incomeByPeriod[p.id]?.paycheck;
+          if (pc != null && pc > 0) { sum += pc; has = true; }
+        }
+      });
+      incomeEvents.forEach(e => {
+        if (!e.date) return; const d = parseISO(e.date);
+        if (d.getFullYear() === y && d.getMonth() === m) sum += (e.amount || 0);
+      });
+      return { sum, has };
+    };
+    const costs = monthsBack.map(mo => costForMonth(mo.y, mo.m));
+    const incomes = monthsBack.map(mo => incomeForMonth(mo.y, mo.m));
+    const avgCost = costs.reduce((s, c) => s + c, 0) / costs.length;
+    const incomeMonths = monthsBack.filter((_, i) => incomes[i].has);
+    const avgIncome = incomeMonths.length
+      ? monthsBack.reduce((s, _, i) => s + (incomes[i].has ? incomes[i].sum : 0), 0) / incomeMonths.length
+      : null;
+    let savedSum = 0, debtSum = 0;
+    monthsBack.forEach((_, i) => {
+      if (!incomes[i].has) return;
+      const surplus = Math.max(0, incomes[i].sum - costs[i]);
+      savedSum += surplus * (settings.savingsSplit / 100);
+      debtSum += surplus * (1 - settings.savingsSplit / 100);
+    });
+    const n = incomeMonths.length;
+    return {
+      avgCost,
+      avgIncome,
+      avgSaved: n ? savedSum / n : null,
+      avgDebt: n ? debtSum / n : null,
+      incomeMonthCount: n,
+    };
+  }, [bills, payPeriods, incomeByPeriod, incomeEvents, settings.savingsSplit, today]);
 
   const groupedBills = useMemo(() => {
     if (settings.grouping === 'category') {
@@ -1721,8 +1768,8 @@ function App() {
           </div>
           <div className="section-meta" style={{ marginTop: -8, marginBottom: 16 }}>
             {settings.forecastMode === 'savings'
-              ? `projected savings · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`
-              : `net per pay period · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`}
+              ? `projected savings from today · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`
+              : `net per pay period from today · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`}
           </div>
           {settings.forecastMode === 'savings' ? (
             <SavingsStrip
@@ -1730,15 +1777,39 @@ function App() {
               onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
               periods={payPeriods}
               projectSavings={projectSavings}
-              current={periodIdx} />
+              current={currentPeriodIndex} />
           ) : (
             <ForecastStrip
               horizon={settings.horizon}
               onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
               periods={payPeriods}
               computeNet={computeNet}
-              current={periodIdx} />
+              current={currentPeriodIndex} />
           )}
+
+          {/* Trailing 3-month averages */}
+          <div className="metrics">
+            <div className="metric-card">
+              <div className="metric-lbl">Avg cost / mo</div>
+              <div className="metric-num">${moneyPlain(metrics.avgCost)}</div>
+              <div className="metric-sub">bills, last 3 months</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-lbl">Avg income / mo</div>
+              <div className="metric-num">{metrics.avgIncome == null ? '—' : `$${moneyPlain(metrics.avgIncome)}`}</div>
+              <div className="metric-sub">{metrics.incomeMonthCount ? `${metrics.incomeMonthCount} mo of data` : 'no income logged'}</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-lbl">Avg saved / mo</div>
+              <div className="metric-num">{metrics.avgSaved == null ? '—' : `$${moneyPlain(metrics.avgSaved)}`}</div>
+              <div className="metric-sub">{settings.savingsSplit}% of surplus</div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-lbl">Avg debt paid / mo</div>
+              <div className="metric-num">{metrics.avgDebt == null ? '—' : `$${moneyPlain(metrics.avgDebt)}`}</div>
+              <div className="metric-sub">{Math.max(0, 100 - settings.savingsSplit)}% of surplus</div>
+            </div>
+          </div>
         </section>
       )}
 
@@ -1748,37 +1819,27 @@ function App() {
           <div className="section-head">
             <div className="section-title">Next period</div>
             <div className="section-meta">
-              {nextPeriod ? `${nextPeriod.label} · ${nextBills.length} bills · $${moneyPlain(nextBillsTotal)}` : '—'}
+              {nextPeriod ? `${nextPeriod.label} · ${nextBills.length} bills · $${moneyPlain(nextBillsTotal)} · tap ✓ to pay ahead` : '—'}
             </div>
           </div>
           {nextBills.length > 0 ? (
-            <div className="events-list">
-              {nextBills.map(b => {
-                const aheadKey = nextPeriod ? `${b.id}::${nextPeriod.id}` : null;
-                const paidAhead = aheadKey && paid[aheadKey]?.paid;
-                return (
-                <div className={`event-row event-row-ahead ${paidAhead ? 'ahead-on' : ''}`} key={b.id}>
-                  <span className="event-date">
-                    {b.dueDate ? b.dueDate.toLocaleString('en-US', { month: 'short', day: 'numeric' }) : '—'}
-                  </span>
-                  <span className="event-name">
-                    {b.name}
-                    <span className="e-note">{CAT_LABEL[b.category]} · {b.method}</span>
-                  </span>
-                  <span className={`event-amt ${b.method === 'credit' ? 'credit-num' : 'minus'}`}>−${moneyPlain(b.amount || 0)}</span>
-                  <button className={`ahead-btn ${paidAhead ? 'on' : ''}`}
-                    title={paidAhead ? 'Paid ahead from this period — click to undo' : 'Pay ahead from this period'}
-                    onClick={() => togglePayAhead(b, nextPeriod)}>
-                    {paidAhead ? '✓ paid ahead' : 'pay ahead'}
-                  </button>
-                </div>
-              );})}
-              <div className="event-row event-row-ahead" style={{ borderBottom: 0, borderTop: '1px solid var(--ink)', paddingTop: 12, marginTop: 4 }}>
-                <span className="event-date">total</span>
-                <span></span>
-                <span className="event-amt" style={{ fontSize: 16, fontWeight: 500 }}>−${moneyPlain(nextBillsTotal)}</span>
-                <span></span>
-              </div>
+            <div className="bill-group">
+              {nextBills.map(b => (
+                <BillRow key={b.id} bill={b}
+                  paidState={nextPeriod ? paid[`${b.id}::${nextPeriod.id}`] : null}
+                  onTogglePaid={(bill) => togglePayAhead(bill, nextPeriod)}
+                  onSetAmount={setAmount}
+                  onSetMethod={setMethod}
+                  onEdit={(bill) => {
+                    const original = bills.find(x => x.id === bill.id);
+                    setAddOpen(false);
+                    setEditingBill(original || bill);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  onDelete={deleteBill}
+                  showAcct={settings.showAccts}
+                  today={today} />
+              ))}
             </div>
           ) : (
             <div style={{ color: 'var(--ink-3)', padding: 12, fontSize: 12 }}>No bills in next period.</div>
