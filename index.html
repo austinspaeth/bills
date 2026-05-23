@@ -193,6 +193,13 @@ a:hover { border-bottom-color: var(--ink); }
 .bill-meta { font-size: 10.5px; color: var(--ink-3); margin-top: 3px; letter-spacing: .02em; display: flex; gap: 6px; flex-wrap: wrap; }
 .cat-tag { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
 .acct-inline, .min-inline { color: var(--ink-3); font-size: 10.5px; }
+.owner-pill {
+  font-size: 9px; letter-spacing: .1em; text-transform: uppercase;
+  border: 1px solid var(--rule-strong); padding: 1px 6px; color: var(--ink-2);
+  border-radius: 0;
+}
+.owner-pill.owner-stephanie { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.autopay-tag { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
 
 .alert-tag {
   font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
@@ -330,7 +337,7 @@ a:hover { border-bottom-color: var(--ink); }
   padding: 10px 0; border-bottom: 1px solid var(--rule);
 }
 .extra-form input {
-  font: inherit; padding: 6px 9px; border: 1px solid var(--rule-strong);
+  font: inherit; font-size: 16px; padding: 6px 9px; border: 1px solid var(--rule-strong);
   background: var(--bg); color: var(--ink); font-family: var(--mono); border-radius: 0;
 }
 .extra-form input:focus { outline: 1px solid var(--ink); outline-offset: -1px; border-color: var(--ink); }
@@ -357,15 +364,39 @@ a:hover { border-bottom-color: var(--ink); }
 .form-row { display: flex; flex-direction: column; gap: 4px; }
 .form-row.full { grid-column: 1 / -1; }
 .form-lbl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
-.form-row input, .form-row select, .form-row textarea {
-  font: inherit; padding: 6px 9px; border: 1px solid var(--rule-strong);
+.form-row input:not([type="radio"]):not([type="checkbox"]),
+.form-row select, .form-row textarea {
+  font: inherit; font-size: 16px; padding: 6px 9px; border: 1px solid var(--rule-strong);
   background: var(--bg); border-radius: 0; color: var(--ink); font-family: var(--mono); width: 100%;
 }
-.form-row input:focus, .form-row select:focus, .form-row textarea:focus {
+.form-row input:not([type="radio"]):not([type="checkbox"]):focus,
+.form-row select:focus, .form-row textarea:focus {
   outline: 1px solid var(--ink); outline-offset: -1px; border-color: var(--ink);
 }
-.form-radio { display: flex; gap: 14px; padding-top: 4px; }
-.form-radio label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.form-radio { display: flex; gap: 18px; padding-top: 4px; }
+.form-radio label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.form-radio input[type="radio"] { width: auto; flex: none; margin: 0; }
+
+.pill-toggle { display: inline-flex; border: 1px solid var(--rule-strong); width: fit-content; }
+.pill-toggle button {
+  appearance: none; background: transparent; border: 0; font-family: var(--mono);
+  font-size: 13px; padding: 6px 16px; cursor: pointer; color: var(--ink-2);
+  letter-spacing: .04em;
+}
+.pill-toggle button + button { border-left: 1px solid var(--rule-strong); }
+.pill-toggle button.on { background: var(--ink); color: var(--bg); }
+
+.toggle-pill {
+  appearance: none; border: 1px solid var(--rule-strong); background: transparent;
+  font-family: var(--mono); font-size: 13px; padding: 6px 14px; cursor: pointer;
+  color: var(--ink-2); letter-spacing: .04em; text-transform: uppercase;
+  display: inline-flex; align-items: center; gap: 8px; width: fit-content;
+}
+.toggle-pill .toggle-dot {
+  width: 9px; height: 9px; border: 1px solid var(--ink-3); border-radius: 50%; display: inline-block;
+}
+.toggle-pill.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.toggle-pill.on .toggle-dot { background: var(--bg); border-color: var(--bg); }
 .form-actions {
   display: flex; gap: 10px; margin-top: 16px; padding-top: 14px;
   border-top: 1px solid var(--rule); justify-content: flex-end; flex-wrap: wrap;
@@ -635,10 +666,11 @@ function BillRow({ bill, paidState, onTogglePaid, onSetAmount, onSetMethod, onEd
           </div>
           <div className="bill-meta">
             <span className="cat-tag">{CAT_LABEL[bill.category]}</span>
+            <span className={`owner-pill owner-${bill.owner || 'austin'}`}>
+              {bill.owner === 'stephanie' ? 'Stephanie' : 'Austin'}
+            </span>
+            {bill.autopay && <span className="autopay-tag">· autopay</span>}
             {bill.acct && <span className="acct-inline">· {showAcct ? bill.acct : '••••'}</span>}
-            {bill.min != null && bill.min > 0 && bill.min !== bill.amount && (
-              <span className="min-inline">· min ${moneyPlain(bill.min)}</span>
-            )}
           </div>
         </div>
         <div className="bill-method-cell" onClick={e => e.stopPropagation()}>
@@ -678,22 +710,16 @@ function BillRow({ bill, paidState, onTogglePaid, onSetAmount, onSetMethod, onEd
           <div className="detail-row">
             <span className="detail-label">{bill.recurring ? 'Due day' : 'Date'}</span>
             <span className="detail-val mono">{bill.recurring ? `${bill.dueDay} of each month` : (bill.date || '—')}</span>
+            <span className="detail-label" style={{ marginLeft: 14 }}>Autopay</span>
+            <span className="detail-val mono">{bill.autopay ? 'on' : 'off'}</span>
+            <span className="detail-label" style={{ marginLeft: 14 }}>Owner</span>
+            <span className="detail-val mono">{bill.owner === 'stephanie' ? 'Stephanie' : 'Austin'}</span>
           </div>
-          {bill.min != null && bill.min > 0 && (
-            <div className="detail-row">
-              <span className="detail-label">Minimum</span>
-              <span className="detail-val mono">${moneyPlain(bill.min)}</span>
-              {amount != null && (
-                <><span className="detail-label" style={{ marginLeft: 14 }}>Paying</span>
-                <span className="detail-val mono">${moneyPlain(amount)}</span></>
-              )}
-            </div>
-          )}
           <div className="detail-actions">
             {bill.url && (
               <a className="btn-link" href={bill.url} target="_blank" rel="noreferrer">Pay on site ↗</a>
             )}
-            <button className="btn-ghost" onClick={() => onEdit(bill)}>Edit bill</button>
+            <button className="btn-ghost" onClick={() => { setOpen(false); onEdit(bill); }}>Edit bill</button>
             <button className="btn-ghost" onClick={() => onSetMethod(bill, method === 'cash' ? 'credit' : 'cash')}>
               Pay with {method === 'cash' ? 'credit' : 'cash'}
             </button>
@@ -709,12 +735,7 @@ function BillRow({ bill, paidState, onTogglePaid, onSetAmount, onSetMethod, onEd
 function BillForm({ bill, onSave, onCancel }) {
   const isEdit = !!bill?.id;
   const todayISO = fmtISO(startOfDay(new Date()));
-  const init = bill || {
-    name: '', category: 'recurring', recurring: true,
-    dueDay: 1, date: todayISO,
-    amount: '', min: '', method: 'cash',
-    acct: '', url: '', notes: '',
-  };
+  const init = bill || {};
   const [f, setF] = useState({
     name: init.name || '',
     category: init.category || 'recurring',
@@ -722,8 +743,9 @@ function BillForm({ bill, onSave, onCancel }) {
     dueDay: init.dueDay ?? 1,
     date: init.date || todayISO,
     amount: init.amount != null && init.amount !== '' ? String(init.amount) : '',
-    min: init.min != null && init.min !== '' ? String(init.min) : '',
     method: init.method || 'cash',
+    owner: init.owner === 'stephanie' ? 'stephanie' : 'austin',
+    autopay: !!init.autopay,
     acct: init.acct || '',
     url: init.url || '',
     notes: init.notes || '',
@@ -739,7 +761,6 @@ function BillForm({ bill, onSave, onCancel }) {
   const submit = () => {
     if (!f.name.trim()) { alert('Bill name is required.'); return; }
     const amt = f.amount === '' ? null : parseFloat(f.amount);
-    const minp = f.min === '' ? (amt ?? 0) : parseFloat(f.min);
     const out = {
       id: bill?.id || `b-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
       name: f.name.trim(),
@@ -748,8 +769,10 @@ function BillForm({ bill, onSave, onCancel }) {
       dueDay: f.recurring ? Math.max(1, Math.min(31, parseInt(f.dueDay, 10) || 1)) : null,
       date: !f.recurring ? f.date : null,
       amount: amt,
-      min: Number.isFinite(minp) ? minp : 0,
+      min: amt ?? 0,
       method: f.method,
+      owner: f.owner,
+      autopay: !!f.autopay,
       acct: f.acct.trim(),
       url: f.url.trim(),
       notes: f.notes.trim(),
@@ -809,17 +832,29 @@ function BillForm({ bill, onSave, onCancel }) {
         </div>
 
         <div className="form-row">
-          <label className="form-lbl">Minimum payment (optional)</label>
-          <input type="number" step="0.01" placeholder="0.00"
-            value={f.min} onChange={e => update('min', e.target.value)} />
-        </div>
-
-        <div className="form-row">
           <label className="form-lbl">Payment method</label>
           <select value={f.method} onChange={e => update('method', e.target.value)}>
             <option value="cash">cash</option>
             <option value="credit">credit</option>
           </select>
+        </div>
+
+        <div className="form-row">
+          <label className="form-lbl">Whose bill</label>
+          <div className="pill-toggle">
+            <button type="button" className={f.owner === 'austin' ? 'on' : ''}
+              onClick={() => update('owner', 'austin')}>Austin</button>
+            <button type="button" className={f.owner === 'stephanie' ? 'on' : ''}
+              onClick={() => update('owner', 'stephanie')}>Stephanie</button>
+          </div>
+        </div>
+
+        <div className="form-row">
+          <label className="form-lbl">Autopay</label>
+          <button type="button" className={`toggle-pill ${f.autopay ? 'on' : ''}`}
+            onClick={() => update('autopay', !f.autopay)}>
+            <span className="toggle-dot" />{f.autopay ? 'enabled' : 'off'}
+          </button>
         </div>
 
         <div className="form-row">
