@@ -475,10 +475,9 @@ a:hover { border-bottom-color: var(--ink); }
       const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
         + '<rect width="100" height="100" rx="18" fill="#111111"/>'
         + '<g fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round">'
-        + '<path d="M38 31 L34 18 Q50 25 66 18 L62 31"/>'
-        + '<path d="M38 31 C27 39 20 52 20 65 C20 81 34 90 50 90 C66 90 80 81 80 65 C80 52 73 39 62 31 Z"/>'
+        + '<path d="M37 30 L33 17 Q50 24 67 17 L63 30"/>'
+        + '<path d="M37 30 C25 39 18 53 18 67 C18 83 33 91 50 91 C67 91 82 83 82 67 C82 53 75 39 63 30 Z"/>'
         + '</g>'
-        + '<text x="50" y="70" text-anchor="middle" font-family="Georgia,\'Times New Roman\',serif" font-size="34" font-weight="700" fill="#ffffff">$</text>'
         + '</svg>';
       const svgUri = 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
       const setLink = (rel, attrs) => {
@@ -957,32 +956,37 @@ function BillForm({ bill, onSave, onCancel }) {
 
 // ── Forecast chart (per-period left over bars + cumulative line) ─────────────
 function ForecastChart({ rows, height = 140 }) {
-  const maxAdd = Math.max(...rows.map(r => Math.abs(r.savingsAdd)), 1);
-  const maxCum = Math.max(...rows.map(r => r.savings), 1);
+  const maxAbs = Math.max(...rows.map(r => Math.abs(r.leftover)), 1);
+  const cums = rows.map(r => r.cumulative);
+  const maxCum = Math.max(...cums, 0);
+  const minCum = Math.min(...cums, 0);
+  const cumRange = Math.max(maxCum - minCum, 1);
   const w = 100 / Math.max(rows.length, 1);
   const monthsShown = 3;
   return (
     <div className="chart" style={{ height }}>
-      <div className="chart-grid"><div className="grid-line zero" style={{ top: 'auto', bottom: 32 }} /></div>
+      <div className="chart-grid"><div className="grid-line zero" /></div>
       {rows.length > 1 && (
         <svg className="chart-line" viewBox={`0 0 ${rows.length * 100} 100`} preserveAspectRatio="none">
           <polyline
-            points={rows.map((r, i) => `${i * 100 + 50},${100 - (r.savings / maxCum) * 90 - 4}`).join(' ')}
+            points={cums.map((c, i) => `${i * 100 + 50},${100 - ((c - minCum) / cumRange) * 90 - 5}`).join(' ')}
             fill="none" stroke="currentColor" strokeWidth="1.5"
             vectorEffect="non-scaling-stroke" opacity="0.4" />
         </svg>
       )}
       <div className="chart-bars">
         {rows.map((r, i) => {
-          const h = (Math.max(0, r.savingsAdd) / maxAdd) * 90;
+          const h = (Math.abs(r.leftover) / maxAbs) * 45;
+          const pos = r.leftover >= 0;
           return (
             <div className="bar-col" key={i} style={{ width: `${w}%` }}
-              title={`${r.period.label}: ${money(r.savingsAdd)} left over`}>
-              <div className="bar pos" style={{ height: `${h}%`, bottom: 0 }} />
+              title={`${r.period.label}: ${money(r.leftover)} left over`}>
+              <div className={`bar ${pos ? 'pos' : 'neg'}`}
+                style={{ height: `${h}%`, [pos ? 'bottom' : 'top']: '50%' }} />
               {i % Math.max(1, Math.ceil(rows.length / Math.min(monthsShown * 2, rows.length))) === 0 && (
                 <div className="bar-lbl">
                   <span className="bl-date">{shortDate(r.period.start)}</span>
-                  <span className="bl-amt">{moneyCompact(r.savingsAdd)}</span>
+                  <span className="bl-amt">{moneyCompact(r.leftover)}</span>
                 </div>
               )}
             </div>
@@ -994,7 +998,7 @@ function ForecastChart({ rows, height = 140 }) {
 }
 
 // ── Forecast strip (per-period left over + cumulative) ───────────────────────
-function ForecastStrip({ horizon, onHorizon, periods, projectSavings, current, buffer }) {
+function ForecastStrip({ horizon, onHorizon, periods, projectLeftover, current, buffer }) {
   const horizons = [
     { id: 1, label: '1 mo', periods: 2 },
     { id: 3, label: '3 mo', periods: 6 },
@@ -1003,16 +1007,16 @@ function ForecastStrip({ horizon, onHorizon, periods, projectSavings, current, b
   ];
   const sel = horizons.find(h => h.id === horizon) || horizons[1];
   const slice = periods.slice(current, current + sel.periods);
-  const rows = projectSavings(slice);
+  const rows = projectLeftover(slice);
   const last = rows[rows.length - 1];
-  const totalLeftover = last?.savings || 0;
-  const firstLeftover = rows[0]?.savingsAdd || 0;
+  const totalLeftover = last?.cumulative || 0;
+  const firstLeftover = rows[0]?.leftover || 0;
   return (
     <div className="forecast">
       <div className="forecast-head">
         <div>
           <div className="income-lbl">Projected left over</div>
-          <div className="forecast-num">{money(totalLeftover)}</div>
+          <div className={`forecast-num ${totalLeftover < 0 ? 'minus' : ''}`}>{money(totalLeftover)}</div>
           <div className="income-sub">
             this period {money(firstLeftover)} · after bills + ${moneyPlain(buffer)} buffer · through {slice[slice.length - 1]?.label.split(' – ')[1] || '—'}
           </div>
@@ -1174,41 +1178,36 @@ function App() {
   const bufferShort = Math.max(0, settings.bufferTarget - afterBills);
   const leftoverAlloc = Math.max(0, afterBills - settings.bufferTarget);
 
-  // Income estimate for a period: explicit paycheck if set, else the estimate,
-  // plus any manually-added extra income that lands in that period.
-  const estIncomeForPeriod = useCallback((p) => {
-    const explicit = incomeByPeriod[p.id]?.paycheck;
-    const base = (explicit != null && explicit !== 0) ? explicit : estimatedPaycheck;
-    const extras = extrasInPeriod(p).reduce((s, e) => s + (e.amount || 0), 0);
-    return base + extras;
-  }, [incomeByPeriod, estimatedPaycheck, extrasInPeriod]);
-
   const cashBillsForPeriod = useCallback((p) =>
     billsForPeriod(bills, p).filter(b => b.method === 'cash').reduce((s, b) => s + (b.amount || 0), 0),
     [bills]);
 
 
-  // Checking balance to anchor projections — always the current period's, so
-  // the forecast reflects "right now" regardless of which period is on screen.
-  const currentChecking = incomeByPeriod[payPeriods[currentPeriodIndex]?.id]?.checking || 0;
+  // Per-period left over — the SAME calculation as the allocation block, run
+  // independently for each period: (that period's checking + income − cash
+  // bills) − buffer. Manual values are used where entered; for future periods
+  // with no entry, paycheck falls back to the estimate and checking to the
+  // buffer (matching the income cells). Credit is excluded.
+  const leftoverForPeriod = useCallback((p) => {
+    const idx = payPeriods.findIndex(pp => pp.id === p.id);
+    const fut = idx > currentPeriodIndex;
+    const manualPc = incomeByPeriod[p.id]?.paycheck;
+    const manualCh = incomeByPeriod[p.id]?.checking;
+    const pc = fut ? ((manualPc != null && manualPc !== 0) ? manualPc : estimatedPaycheck) : (manualPc || 0);
+    const checkingP = fut ? (manualCh != null ? manualCh : settings.bufferTarget) : (manualCh || 0);
+    const extras = extrasInPeriod(p).reduce((s, e) => s + (e.amount || 0), 0);
+    return checkingP + pc + extras - cashBillsForPeriod(p) - settings.bufferTarget;
+  }, [payPeriods, currentPeriodIndex, incomeByPeriod, estimatedPaycheck, extrasInPeriod, cashBillsForPeriod, settings.bufferTarget]);
 
-  // Project cumulative left-over across periods. Each period: add income, take
-  // out cash bills, keep the buffer in checking; everything above the buffer is
-  // left over (cumulative).
-  const projectSavings = useCallback((periods) => {
-    let checkingBal = currentChecking;
-    let savings = 0;
+  // Per-period left over + running cumulative across a set of periods.
+  const projectLeftover = useCallback((periods) => {
+    let cum = 0;
     return periods.map(p => {
-      checkingBal += estIncomeForPeriod(p) - cashBillsForPeriod(p);
-      let savingsAdd = 0;
-      if (checkingBal > settings.bufferTarget) {
-        savingsAdd = checkingBal - settings.bufferTarget;
-        checkingBal = settings.bufferTarget;
-      }
-      savings += savingsAdd;
-      return { period: p, savings, checking: checkingBal, savingsAdd };
+      const leftover = leftoverForPeriod(p);
+      cum += leftover;
+      return { period: p, leftover, cumulative: cum };
     });
-  }, [currentChecking, estIncomeForPeriod, cashBillsForPeriod, settings.bufferTarget]);
+  }, [leftoverForPeriod]);
 
   // Trailing-3-month averages (current month + 2 prior). Cost is always
   // computable from recurring bills; income/saved/debt only count months that
@@ -1258,12 +1257,12 @@ function App() {
     };
   }, [bills, payPeriods, incomeByPeriod, incomeEvents, today]);
 
-  // Projected cumulative left-over saved over the next 12 months.
+  // Projected cumulative left-over over the next 12 months.
   const oneYearSaved = useMemo(() => {
     const slice = payPeriods.slice(currentPeriodIndex, currentPeriodIndex + 26);
-    const rows = projectSavings(slice);
-    return rows.length ? rows[rows.length - 1].savings : 0;
-  }, [payPeriods, currentPeriodIndex, projectSavings]);
+    const rows = projectLeftover(slice);
+    return rows.length ? rows[rows.length - 1].cumulative : 0;
+  }, [payPeriods, currentPeriodIndex, projectLeftover]);
 
   const groupedBills = useMemo(() => {
     if (settings.grouping === 'category') {
@@ -1677,7 +1676,7 @@ function App() {
             horizon={settings.horizon}
             onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
             periods={payPeriods}
-            projectSavings={projectSavings}
+            projectLeftover={projectLeftover}
             current={currentPeriodIndex}
             buffer={settings.bufferTarget} />
 
