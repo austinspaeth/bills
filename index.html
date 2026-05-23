@@ -565,7 +565,6 @@ const DEFAULT_STATE = {
   settings: {
     grouping: 'due',
     horizon: 3,
-    forecastMode: 'cashflow',
     bufferTarget: 3000,
     theme: 'paper',
     density: 'regular',
@@ -956,110 +955,34 @@ function BillForm({ bill, onSave, onCancel }) {
   );
 }
 
-// ── Cashflow Chart ──────────────────────────────────────────────────────────
-function CashflowChart({ periods, computeNet, height = 140 }) {
-  const data = periods.map(p => ({ period: p, net: computeNet(p) }));
-  const maxAbs = Math.max(...data.map(d => Math.abs(d.net)), 1);
-  const w = 100 / Math.max(data.length, 1);
-  let running = 0;
-  const cumulative = data.map(d => { running += d.net; return running; });
-  const maxCum = Math.max(...cumulative, 0);
-  const minCum = Math.min(...cumulative, 0);
-  const cumRange = Math.max(maxCum - minCum, 1);
+// ── Forecast chart (per-period left over bars + cumulative line) ─────────────
+function ForecastChart({ rows, height = 140 }) {
+  const maxAdd = Math.max(...rows.map(r => Math.abs(r.savingsAdd)), 1);
+  const maxCum = Math.max(...rows.map(r => r.savings), 1);
+  const w = 100 / Math.max(rows.length, 1);
   const monthsShown = 3;
-
   return (
     <div className="chart" style={{ height }}>
-      <div className="chart-grid"><div className="grid-line zero" /></div>
-      {data.length > 1 && (
-        <svg className="chart-line" viewBox={`0 0 ${data.length * 100} 100`} preserveAspectRatio="none">
+      <div className="chart-grid"><div className="grid-line zero" style={{ top: 'auto', bottom: 32 }} /></div>
+      {rows.length > 1 && (
+        <svg className="chart-line" viewBox={`0 0 ${rows.length * 100} 100`} preserveAspectRatio="none">
           <polyline
-            points={cumulative.map((c, i) => `${i * 100 + 50},${100 - ((c - minCum) / cumRange) * 90 - 5}`).join(' ')}
+            points={rows.map((r, i) => `${i * 100 + 50},${100 - (r.savings / maxCum) * 90 - 4}`).join(' ')}
             fill="none" stroke="currentColor" strokeWidth="1.5"
             vectorEffect="non-scaling-stroke" opacity="0.4" />
         </svg>
       )}
       <div className="chart-bars">
-        {data.map((d, i) => {
-          const h = (Math.abs(d.net) / maxAbs) * 45;
-          const positive = d.net >= 0;
-          return (
-            <div className="bar-col" key={i} style={{ width: `${w}%` }}
-              title={`${d.period.label}: ${money(d.net)}`}>
-              <div className={`bar ${positive ? 'pos' : 'neg'}`}
-                style={{ height: `${h}%`, [positive ? 'bottom' : 'top']: '50%' }} />
-              {i % Math.max(1, Math.ceil(data.length / Math.min(monthsShown * 2, data.length))) === 0 && (
-                <div className="bar-lbl">
-                  <span className="bl-date">{shortDate(d.period.start)}</span>
-                  <span className="bl-amt">{moneyCompact(d.net)}</span>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── Forecast Strip ──────────────────────────────────────────────────────────
-function ForecastStrip({ horizon, onHorizon, periods, computeNet, current }) {
-  const horizons = [
-    { id: 1, label: '1 mo', periods: 2 },
-    { id: 3, label: '3 mo', periods: 6 },
-    { id: 6, label: '6 mo', periods: 13 },
-    { id: 12, label: '12 mo', periods: 26 },
-  ];
-  const sel = horizons.find(h => h.id === horizon) || horizons[1];
-  const slice = periods.slice(current, current + sel.periods);
-  const total = slice.reduce((s, p) => s + computeNet(p), 0);
-  return (
-    <div className="forecast">
-      <div className="forecast-head">
-        <div>
-          <div className="income-lbl">Projected net</div>
-          <div className={`forecast-num ${total < 0 ? 'minus' : ''}`}>{money(total)}</div>
-          <div className="income-sub">through {slice[slice.length - 1]?.label.split(' – ')[1] || '—'}</div>
-        </div>
-        <div className="horizon-pick">
-          {horizons.map(h => (
-            <button key={h.id} className={h.id === horizon ? 'on' : ''}
-              onClick={() => onHorizon(h.id)}>{h.label}</button>
-          ))}
-        </div>
-      </div>
-      <CashflowChart periods={slice} computeNet={computeNet} height={120} />
-    </div>
-  );
-}
-
-// ── Savings growth chart (cumulative projected savings) ──────────────────────
-function SavingsChart({ rows, height = 140 }) {
-  const maxSav = Math.max(...rows.map(r => r.savings), 1);
-  const w = 100 / Math.max(rows.length, 1);
-  const monthsShown = 3;
-  return (
-    <div className="chart" style={{ height }}>
-      <div className="chart-grid"><div className="grid-line zero" style={{ top: 'auto', bottom: 18 }} /></div>
-      {rows.length > 1 && (
-        <svg className="chart-line" viewBox={`0 0 ${rows.length * 100} 100`} preserveAspectRatio="none">
-          <polyline
-            points={rows.map((r, i) => `${i * 100 + 50},${100 - (r.savings / maxSav) * 92 - 4}`).join(' ')}
-            fill="none" stroke="currentColor" strokeWidth="1.5"
-            vectorEffect="non-scaling-stroke" opacity="0.45" />
-        </svg>
-      )}
-      <div className="chart-bars">
         {rows.map((r, i) => {
-          const h = (r.savings / maxSav) * 90;
+          const h = (Math.max(0, r.savingsAdd) / maxAdd) * 90;
           return (
             <div className="bar-col" key={i} style={{ width: `${w}%` }}
-              title={`${r.period.label}: ${money(r.savings)} saved`}>
+              title={`${r.period.label}: ${money(r.savingsAdd)} left over`}>
               <div className="bar pos" style={{ height: `${h}%`, bottom: 0 }} />
               {i % Math.max(1, Math.ceil(rows.length / Math.min(monthsShown * 2, rows.length))) === 0 && (
                 <div className="bar-lbl">
                   <span className="bl-date">{shortDate(r.period.start)}</span>
-                  <span className="bl-amt">{moneyCompact(r.savings)}</span>
+                  <span className="bl-amt">{moneyCompact(r.savingsAdd)}</span>
                 </div>
               )}
             </div>
@@ -1070,8 +993,8 @@ function SavingsChart({ rows, height = 140 }) {
   );
 }
 
-// ── Savings growth strip ─────────────────────────────────────────────────────
-function SavingsStrip({ horizon, onHorizon, periods, projectSavings, current }) {
+// ── Forecast strip (per-period left over + cumulative) ───────────────────────
+function ForecastStrip({ horizon, onHorizon, periods, projectSavings, current, buffer }) {
   const horizons = [
     { id: 1, label: '1 mo', periods: 2 },
     { id: 3, label: '3 mo', periods: 6 },
@@ -1082,15 +1005,16 @@ function SavingsStrip({ horizon, onHorizon, periods, projectSavings, current }) 
   const slice = periods.slice(current, current + sel.periods);
   const rows = projectSavings(slice);
   const last = rows[rows.length - 1];
-  const totalSaved = last?.savings || 0;
+  const totalLeftover = last?.savings || 0;
+  const firstLeftover = rows[0]?.savingsAdd || 0;
   return (
     <div className="forecast">
       <div className="forecast-head">
         <div>
           <div className="income-lbl">Projected left over</div>
-          <div className="forecast-num">{money(totalSaved)}</div>
+          <div className="forecast-num">{money(totalLeftover)}</div>
           <div className="income-sub">
-            kept out of buffer · through {slice[slice.length - 1]?.label.split(' – ')[1] || '—'}
+            this period {money(firstLeftover)} · after bills + ${moneyPlain(buffer)} buffer · through {slice[slice.length - 1]?.label.split(' – ')[1] || '—'}
           </div>
         </div>
         <div className="horizon-pick">
@@ -1100,7 +1024,7 @@ function SavingsStrip({ horizon, onHorizon, periods, projectSavings, current }) 
           ))}
         </div>
       </div>
-      <SavingsChart rows={rows} height={120} />
+      <ForecastChart rows={rows} height={120} />
     </div>
   );
 }
@@ -1263,9 +1187,6 @@ function App() {
     billsForPeriod(bills, p).filter(b => b.method === 'cash').reduce((s, b) => s + (b.amount || 0), 0),
     [bills]);
 
-  // Cash-flow net for a period = estimated income − cash bills (credit is deferred).
-  const computeNet = useCallback((p) => estIncomeForPeriod(p) - cashBillsForPeriod(p),
-    [estIncomeForPeriod, cashBillsForPeriod]);
 
   // Checking balance to anchor projections — always the current period's, so
   // the forecast reflects "right now" regardless of which period is on screen.
@@ -1747,33 +1668,18 @@ function App() {
         <section className="section">
           <div className="section-head">
             <div className="section-title">Forecast</div>
-            <div className="section-tabs">
-              <button className={settings.forecastMode !== 'savings' ? 'on' : ''}
-                onClick={() => setSettings(s => ({ ...s, forecastMode: 'cashflow' }))}>Cash flow</button>
-              <button className={settings.forecastMode === 'savings' ? 'on' : ''}
-                onClick={() => setSettings(s => ({ ...s, forecastMode: 'savings' }))}>Savings growth</button>
-            </div>
+            <div className="section-meta">left over per pay period, from today</div>
           </div>
           <div className="section-meta" style={{ marginTop: -8, marginBottom: 16 }}>
-            {settings.forecastMode === 'savings'
-              ? `projected savings from today · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`
-              : `net per pay period from today · estimated paycheck $${moneyPlain(estimatedPaycheck)}/period`}
+            estimated paycheck ${moneyPlain(estimatedPaycheck)}/period · credit excluded · ${moneyPlain(settings.bufferTarget)} buffer kept
           </div>
-          {settings.forecastMode === 'savings' ? (
-            <SavingsStrip
-              horizon={settings.horizon}
-              onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
-              periods={payPeriods}
-              projectSavings={projectSavings}
-              current={currentPeriodIndex} />
-          ) : (
-            <ForecastStrip
-              horizon={settings.horizon}
-              onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
-              periods={payPeriods}
-              computeNet={computeNet}
-              current={currentPeriodIndex} />
-          )}
+          <ForecastStrip
+            horizon={settings.horizon}
+            onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
+            periods={payPeriods}
+            projectSavings={projectSavings}
+            current={currentPeriodIndex}
+            buffer={settings.bufferTarget} />
 
           {/* Trailing 3-month averages */}
           <div className="metrics">
