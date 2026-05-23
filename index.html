@@ -1,0 +1,1281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bills — paper ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-2: #f7f7f7;
+  --bg-3: #efefef;
+  --ink: #111111;
+  --ink-2: #4a4a4a;
+  --ink-3: #888888;
+  --ink-4: #bbbbbb;
+  --rule: #ececec;
+  --rule-strong: #d4d4d4;
+  --mono: "IBM Plex Mono", "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+.theme-paper { --bg:#fff; --bg-2:#f7f7f7; --bg-3:#efefef; --ink:#111; --ink-2:#4a4a4a; --ink-3:#888; --ink-4:#bbb; --rule:#ececec; --rule-strong:#d4d4d4; }
+.theme-bone  { --bg:#fafaf8; --bg-2:#f2f2ee; --bg-3:#e8e8e2; --ink:#1a1a18; --ink-2:#545450; --ink-3:#8a8a85; --ink-4:#b8b8b3; --rule:#ebebe5; --rule-strong:#d4d4ce; }
+.theme-ink   { --bg:#111; --bg-2:#1a1a1a; --bg-3:#232323; --ink:#f4f4f4; --ink-2:#b8b8b8; --ink-3:#777; --ink-4:#4a4a4a; --rule:#2a2a2a; --rule-strong:#3a3a3a; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+body {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+button { font-family: var(--mono); }
+input, select, textarea { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--ink-4); }
+a:hover { border-bottom-color: var(--ink); }
+
+.app { max-width: 920px; margin: 0 auto; padding: 56px 40px 120px; }
+@media (max-width: 720px) { .app { padding: 24px 18px 100px; } }
+
+.brand-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding-bottom: 18px; margin-bottom: 36px; border-bottom: 1px solid var(--ink);
+  gap: 16px; flex-wrap: wrap;
+}
+.brand { font-size: 14px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; display: flex; align-items: baseline; gap: 16px; }
+.brand .dot { color: var(--ink-3); }
+.brand-sub { color: var(--ink-3); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+
+.period-nav { display: flex; align-items: center; gap: 14px; font-size: 12px; }
+.period-nav button {
+  appearance: none; border: 0; background: transparent; color: var(--ink-3);
+  width: 22px; height: 22px; cursor: pointer; font-size: 13px; font-family: var(--mono);
+}
+.period-nav button:hover { color: var(--ink); }
+.period-label { letter-spacing: .02em; text-align: center; }
+.period-today { font-size: 10px; color: var(--ink-3); letter-spacing: .08em; text-transform: uppercase; margin-top: 2px; text-align: center; }
+
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+.tool-btn {
+  appearance: none; background: transparent; border: 1px solid var(--rule-strong);
+  color: var(--ink-2); font: inherit; padding: 4px 9px;
+  font-size: 10px; letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
+}
+.tool-btn:hover { color: var(--ink); border-color: var(--ink); }
+.tool-btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.income {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  border: 1px solid var(--ink); margin-bottom: 36px;
+}
+@media (max-width: 720px) { .income { grid-template-columns: 1fr; } }
+.income-cell {
+  padding: 22px 24px; border-right: 1px solid var(--rule-strong);
+  display: flex; flex-direction: column; gap: 6px;
+}
+@media (max-width: 720px) {
+  .income-cell { border-right: 0; border-bottom: 1px solid var(--rule-strong); }
+  .income-cell:last-child { border-bottom: 0; }
+}
+.income-cell:last-child { border-right: 0; background: var(--ink); color: var(--bg); }
+.income-cell:last-child .income-lbl { color: var(--bg-3); }
+.income-lbl { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.income-num { font-size: 32px; font-weight: 500; letter-spacing: -.02em; display: flex; align-items: baseline; gap: 4px; }
+.income-num .cur { font-size: 18px; color: var(--ink-3); font-weight: 400; }
+.income-cell:last-child .income-num .cur { color: var(--bg-3); }
+.income-input {
+  appearance: none; border: 0; background: transparent; color: var(--ink);
+  font-size: 32px; font-weight: 500; letter-spacing: -.02em;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  padding: 0; width: 100%; outline: none;
+}
+.income-input:focus { border-bottom: 1px solid var(--ink); }
+.income-sub { font-size: 11px; color: var(--ink-3); }
+
+.math { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 36px; gap: 24px; }
+@media (max-width: 720px) { .math { grid-template-columns: 1fr; } }
+.math-line {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--rule);
+}
+.math-line .math-lbl { flex: 1; min-width: 0; }
+.math-line .math-num { white-space: nowrap; flex-shrink: 0; }
+.math-line.total { border-bottom: 0; border-top: 1px solid var(--ink); padding-top: 16px; margin-top: 4px; }
+.math-lbl { font-size: 11px; color: var(--ink-2); letter-spacing: .08em; text-transform: uppercase; }
+.math-num { font-size: 16px; }
+.math-num.lg { font-size: 28px; font-weight: 500; letter-spacing: -.015em; }
+.math-num.muted { color: var(--ink-3); }
+
+.alloc { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; border: 1px solid var(--rule-strong); }
+.alloc-bar { display: flex; height: 10px; background: var(--bg-2); border: 1px solid var(--rule); }
+.alloc-seg { height: 100%; transition: width .25s; }
+.seg-debt { background: var(--ink); }
+.seg-savings { background: var(--ink-3); }
+.seg-buffer { background: var(--ink-4); }
+.alloc-legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 11px; }
+.alloc-legend > div { display: flex; flex-direction: column; gap: 3px; }
+.alloc-legend .l { color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; font-size: 10px; }
+.alloc-legend .v { font-size: 14px; color: var(--ink); }
+.alloc-stepper { display: flex; gap: 12px; align-items: center; padding-top: 10px; border-top: 1px solid var(--rule); font-size: 11px; flex-wrap: wrap; }
+.alloc-stepper label { display: flex; align-items: center; gap: 6px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
+.alloc-stepper input[type="number"] {
+  width: 56px; padding: 3px 5px; border: 1px solid var(--rule-strong); background: var(--bg);
+  color: var(--ink); font-size: 12px; text-align: right;
+}
+.alloc-stepper input[type="number"]:focus { outline: 1px solid var(--ink); outline-offset: -1px; }
+
+.section { margin-bottom: 48px; }
+.section-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding-bottom: 10px; margin-bottom: 16px; border-bottom: 1px solid var(--ink);
+  gap: 12px; flex-wrap: wrap;
+}
+.section-title { font-size: 12px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
+.section-meta { color: var(--ink-3); font-size: 11px; letter-spacing: .04em; }
+.section-tabs { display: flex; gap: 18px; }
+.section-tabs button {
+  appearance: none; border: 0; background: transparent; font: inherit; color: var(--ink-3); cursor: pointer;
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 0;
+}
+.section-tabs button.on { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); margin-bottom: 36px; border: 1px solid var(--ink); }
+@media (max-width: 720px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+.tile { padding: 18px 20px; border-right: 1px solid var(--rule-strong); }
+.tile:last-child { border-right: 0; }
+@media (max-width: 720px) {
+  .tile { border-right: 0; border-bottom: 1px solid var(--rule-strong); }
+  .tile:nth-child(odd) { border-right: 1px solid var(--rule-strong); }
+  .tile:nth-last-child(-n+2) { border-bottom: 0; }
+}
+.tile-lbl { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.tile-num { font-size: 22px; font-weight: 500; margin-top: 6px; letter-spacing: -.02em; }
+.tile-sub { font-size: 10.5px; color: var(--ink-3); margin-top: 4px; letter-spacing: .02em; }
+
+.bill-group { margin-bottom: 20px; }
+.bill-group-head {
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3);
+  padding: 14px 0 6px; display: flex; justify-content: space-between;
+}
+
+.bill { border-bottom: 1px solid var(--rule); }
+.bill:hover { background: var(--bg-2); }
+.bill.paid { color: var(--ink-3); }
+.bill.paid .bill-name { text-decoration: var(--paid-decoration, none); color: var(--ink-3); }
+
+.bill-main {
+  display: grid; grid-template-columns: 28px 60px 1fr 70px 110px;
+  align-items: center; gap: 16px; padding: 11px 0; cursor: pointer;
+}
+.density-compact .bill-main { padding: 7px 0; gap: 12px; }
+.density-comfy .bill-main { padding: 16px 0; gap: 22px; }
+@media (max-width: 600px) {
+  .bill-main { grid-template-columns: 24px 48px 1fr auto; gap: 10px; padding: 10px 0; }
+  .bill-method-cell { display: none; }
+}
+
+.bill-due { font-size: 11px; color: var(--ink-3); letter-spacing: .04em; white-space: nowrap; }
+.bill-due .d { color: var(--ink); font-size: 13px; }
+
+.bill-name { font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bill-meta { font-size: 10.5px; color: var(--ink-3); margin-top: 3px; letter-spacing: .02em; display: flex; gap: 6px; flex-wrap: wrap; }
+.cat-tag { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.acct-inline, .min-inline { color: var(--ink-3); font-size: 10.5px; }
+
+.alert-tag {
+  font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+  font-weight: 500; border-left: 2px solid var(--ink-3); padding-left: 6px;
+}
+.alert-tag.overdue-tag { color: var(--ink); border-left-color: var(--ink); }
+
+.bill-amt { font-size: 15px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; word-break: keep-all; }
+.bill-amt .amt-cur { color: var(--ink-3); margin-right: 2px; }
+.bill-amt.unset { color: var(--ink-4); font-style: italic; }
+.amt-input {
+  font-family: var(--mono); font-size: 15px; width: 100px;
+  background: var(--bg); border: 1px solid var(--ink); border-radius: 0;
+  padding: 4px 8px; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums;
+}
+.amt-input:focus { outline: 0; }
+
+.chip {
+  appearance: none; border: 1px solid var(--rule-strong);
+  background: transparent; padding: 3px 8px; border-radius: 0;
+  font: inherit; font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-2); cursor: pointer; font-family: var(--mono); min-width: 60px;
+}
+.chip-cash { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip-credit { background: transparent; color: var(--ink-2); border-color: var(--rule-strong); }
+
+.mark {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; font-family: var(--mono); color: var(--ink-2); padding: 0;
+}
+.mark-stamp { width: 22px; height: 22px; position: relative; }
+.mark-stamp .stamp-empty { width: 16px; height: 16px; border: 1px solid var(--ink-3); border-radius: 0; display: inline-block; }
+.mark-stamp .stamp-text {
+  font-family: var(--mono); font-weight: 600; font-size: 9px; letter-spacing: .06em;
+  color: var(--ink); border: 1px solid var(--ink); padding: 1px 3px;
+  transform: rotate(-6deg); display: inline-block;
+}
+
+.bill-detail {
+  background: var(--bg-2); border-top: 1px solid var(--rule);
+  padding: 16px 20px 16px 104px; font-size: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+@media (max-width: 600px) { .bill-detail { padding-left: 20px; } }
+.detail-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.detail-label { color: var(--ink-3); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; min-width: 80px; }
+.detail-val { color: var(--ink); word-break: break-all; }
+.copy-btn {
+  appearance: none; border: 1px solid var(--rule-strong); background: transparent;
+  font-size: 10px; letter-spacing: .08em; padding: 2px 7px; border-radius: 0;
+  color: var(--ink-2); cursor: pointer; font-family: var(--mono); text-transform: uppercase;
+}
+.copy-btn:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.detail-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.btn-link {
+  font-size: 11px; padding: 5px 10px; border: 1px solid var(--ink); border-radius: 0;
+  color: var(--bg); background: var(--ink); letter-spacing: .06em; text-transform: uppercase;
+}
+.btn-ghost {
+  appearance: none; font-size: 11px; padding: 5px 10px;
+  border: 1px solid var(--rule-strong); border-radius: 0;
+  color: var(--ink-2); background: transparent; cursor: pointer;
+  font-family: var(--mono); letter-spacing: .06em; text-transform: uppercase;
+}
+.btn-ghost:hover { color: var(--ink); border-color: var(--ink); }
+.btn-ghost.danger:hover { color: var(--bg); background: var(--ink); border-color: var(--ink); }
+
+.forecast { padding: 0; }
+.forecast-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 18px; gap: 12px; flex-wrap: wrap;
+}
+.forecast-num { font-size: 30px; line-height: 1; margin-top: 6px; font-weight: 500; letter-spacing: -.02em; }
+.forecast-num.minus { color: var(--ink-3); }
+.horizon-pick { display: flex; gap: 0; }
+.horizon-pick button {
+  appearance: none; border: 1px solid var(--rule-strong); background: transparent;
+  font-size: 10px; letter-spacing: .1em; padding: 5px 10px; text-transform: uppercase;
+  font-family: var(--mono); color: var(--ink-3); cursor: pointer; margin-left: -1px;
+}
+.horizon-pick button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); position: relative; z-index: 1; }
+
+.chart { position: relative; width: 100%; padding-bottom: 18px; }
+.chart-grid { position: absolute; inset: 0; bottom: 18px; }
+.grid-line.zero { position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--rule-strong); }
+.chart-line { position: absolute; left: 0; right: 0; top: 0; bottom: 18px; width: 100%; height: calc(100% - 18px); color: var(--ink-3); pointer-events: none; }
+.chart-bars { position: absolute; left: 0; right: 0; top: 0; bottom: 18px; display: flex; align-items: stretch; }
+.bar-col { position: relative; height: 100%; }
+.bar { position: absolute; left: 25%; right: 25%; background: var(--ink); min-height: 1px; }
+.bar.neg { background: var(--ink-3); }
+.bar-lbl {
+  position: absolute; bottom: -16px; left: 0; right: 0; text-align: center;
+  font-size: 9px; color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase;
+}
+
+.events-list { display: flex; flex-direction: column; }
+.event-row {
+  display: grid; grid-template-columns: 90px 1fr auto; gap: 16px; align-items: baseline;
+  padding: 9px 0; border-bottom: 1px solid var(--rule); font-size: 13px;
+}
+.event-date { font-size: 11px; color: var(--ink-3); letter-spacing: .04em; text-transform: uppercase; }
+.event-name { font-size: 13px; }
+.event-name .e-note { color: var(--ink-3); font-size: 10.5px; margin-left: 10px; }
+.event-amt { font-size: 14px; white-space: nowrap; }
+.event-amt.minus { color: var(--ink-2); }
+
+.add-quick-collapsed {
+  text-align: center; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-3); cursor: pointer; padding: 14px 0; border-bottom: 1px solid var(--rule);
+}
+.add-quick-collapsed:hover { color: var(--ink); }
+
+.form-panel {
+  border: 1px solid var(--ink); padding: 20px 22px; margin-bottom: 12px; background: var(--bg);
+}
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
+@media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+.form-row { display: flex; flex-direction: column; gap: 4px; }
+.form-row.full { grid-column: 1 / -1; }
+.form-lbl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.form-row input, .form-row select, .form-row textarea {
+  font: inherit; padding: 6px 9px; border: 1px solid var(--rule-strong);
+  background: var(--bg); border-radius: 0; color: var(--ink); font-family: var(--mono); width: 100%;
+}
+.form-row input:focus, .form-row select:focus, .form-row textarea:focus {
+  outline: 1px solid var(--ink); outline-offset: -1px; border-color: var(--ink);
+}
+.form-radio { display: flex; gap: 14px; padding-top: 4px; }
+.form-radio label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.form-actions {
+  display: flex; gap: 10px; margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid var(--rule); justify-content: flex-end; flex-wrap: wrap;
+}
+.form-actions .btn-primary {
+  appearance: none; padding: 7px 16px; font: inherit;
+  background: var(--ink); color: var(--bg); border: 1px solid var(--ink); border-radius: 0;
+  cursor: pointer; letter-spacing: .06em; text-transform: uppercase; font-size: 11px; font-family: var(--mono);
+}
+.form-actions .btn-secondary {
+  appearance: none; padding: 7px 16px; font: inherit; background: transparent;
+  color: var(--ink-3); border: 1px solid var(--rule-strong); border-radius: 0;
+  cursor: pointer; letter-spacing: .06em; text-transform: uppercase; font-size: 11px; font-family: var(--mono);
+}
+.form-actions .btn-secondary:hover { color: var(--ink); border-color: var(--ink); }
+
+.empty-state {
+  padding: 40px 20px; text-align: center; color: var(--ink-3);
+  border: 1px dashed var(--rule-strong); font-size: 12px; letter-spacing: .04em;
+}
+.empty-state p { margin: 0 0 10px; }
+
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: var(--bg); padding: 10px 18px;
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  z-index: 100; border: 1px solid var(--ink);
+}
+
+.footnote {
+  margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--ink);
+  font-size: 10px; color: var(--ink-3); letter-spacing: .08em; text-transform: uppercase;
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+.footnote .links { display: flex; gap: 14px; flex-wrap: wrap; }
+.footnote button {
+  appearance: none; background: transparent; border: 0; color: var(--ink-3);
+  font: inherit; cursor: pointer; padding: 0; letter-spacing: .08em; text-transform: uppercase;
+}
+.footnote button:hover { color: var(--ink); }
+</style>
+</head>
+<body class="theme-paper density-regular">
+  <div id="root"></div>
+  <input type="file" id="import-file" accept="application/json" style="display:none" />
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+
+  <script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useRef, useCallback } = React;
+const STORAGE_KEY = 'bills.v1';
+
+// ── Formatting helpers ──────────────────────────────────────────────────────
+const moneyPlain = (n) => Math.abs(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const money = (n) => (n < 0 ? '−' : '') + '$' + moneyPlain(n);
+const shortDate = (d) => d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+const dayNum = (d) => d.getDate();
+const monthShort = (d) => d.toLocaleString('en-US', { month: 'short' });
+const fmtISO = (d) => {
+  const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+};
+const parseISO = (s) => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+const addDays = (date, days) => { const x = new Date(date); x.setDate(x.getDate() + days); return x; };
+const startOfDay = (d) => { const x = new Date(d); x.setHours(0,0,0,0); return x; };
+
+const CAT_LABEL = { cc: 'Credit card', loan: 'Loan', recurring: 'Recurring', savings: 'Savings', oneoff: 'One-off' };
+const CAT_OPTIONS = [
+  { value: 'recurring', label: 'Recurring' },
+  { value: 'cc', label: 'Credit card' },
+  { value: 'loan', label: 'Loan' },
+  { value: 'savings', label: 'Savings' },
+  { value: 'oneoff', label: 'One-off' },
+];
+const GROUP_ORDER_CAT = ['recurring', 'cc', 'loan', 'oneoff', 'savings'];
+
+// ── Persistence ─────────────────────────────────────────────────────────────
+const DEFAULT_STATE = {
+  bills: [],
+  paid: {},
+  paycheck: 0,
+  checking: 0,
+  payAnchor: null,        // ISO date — last/known paycheck Friday; biweekly from here
+  settings: {
+    grouping: 'due',
+    horizon: 3,
+    bufferTarget: 3000,
+    savingsSplit: 40,
+    theme: 'paper',
+    density: 'regular',
+    showAccts: true,
+    strikePaid: true,
+  },
+};
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_STATE, ...parsed, settings: { ...DEFAULT_STATE.settings, ...(parsed.settings || {}) } };
+  } catch (e) { return null; }
+}
+function saveState(state) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+// Default pay anchor: nearest past Friday from today.
+function defaultPayAnchor() {
+  const today = startOfDay(new Date());
+  const dow = today.getDay();              // 0=Sun .. 6=Sat
+  const back = (dow - 5 + 7) % 7;          // days since most recent Friday
+  return fmtISO(addDays(today, -back));
+}
+
+// Build biweekly pay periods from anchor, spanning past 2 and forward 26.
+function buildPayPeriods(anchorISO) {
+  const anchor = parseISO(anchorISO);
+  const out = [];
+  for (let i = -2; i < 26; i++) {
+    const start = addDays(anchor, i * 14);
+    const end = addDays(start, 13);
+    out.push({
+      id: `pp-${fmtISO(start)}`,
+      start, end, payDate: start,
+      label: `${shortDate(start)} – ${shortDate(end)}`,
+    });
+  }
+  return out;
+}
+
+// Compute the due date for a recurring bill within a given period.
+function billDueDate(bill, period) {
+  if (!bill.recurring) return bill.date ? parseISO(bill.date) : null;
+  const dd = clampDay(bill.dueDay, period.start);
+  const startMonth = period.start.getMonth(), startYear = period.start.getFullYear();
+  for (let m = 0; m <= 1; m++) {
+    const month = startMonth + m;
+    const y = startYear + Math.floor(month / 12);
+    const mm = ((month % 12) + 12) % 12;
+    const lastDay = new Date(y, mm + 1, 0).getDate();
+    const day = Math.min(dd, lastDay);
+    const inst = new Date(y, mm, day);
+    if (inst >= period.start && inst <= period.end) return inst;
+  }
+  return null;
+}
+function clampDay(d, fromDate) {
+  const n = parseInt(d, 10);
+  if (Number.isNaN(n) || n < 1) return 1;
+  if (n > 31) return 31;
+  return n;
+}
+
+function isBillInPeriod(bill, period) {
+  if (!bill.recurring) {
+    if (!bill.date) return false;
+    const d = parseISO(bill.date);
+    return d >= period.start && d <= period.end;
+  }
+  return billDueDate(bill, period) != null;
+}
+
+function billsForPeriod(bills, period) {
+  return bills
+    .filter(b => isBillInPeriod(b, period))
+    .map(b => ({ ...b, dueDate: billDueDate(b, period) }))
+    .sort((a, b) => a.dueDate - b.dueDate);
+}
+
+// ── Paid Mark (stamp style) ─────────────────────────────────────────────────
+function PaidMark({ paid, onClick }) {
+  return (
+    <button className={`mark mark-stamp ${paid ? 'on' : 'off'}`} onClick={onClick}
+      aria-label={paid ? 'Mark unpaid' : 'Mark paid'}>
+      {paid ? <span className="stamp-text">PAID</span> : <span className="stamp-empty" />}
+    </button>
+  );
+}
+
+// ── Method Chip ─────────────────────────────────────────────────────────────
+function MethodChip({ method, onClick }) {
+  return (
+    <button className={`chip chip-${method}`} onClick={onClick} title="Toggle payment method">
+      {method === 'cash' ? 'cash' : 'credit'}
+    </button>
+  );
+}
+
+// ── Bill Row ────────────────────────────────────────────────────────────────
+function BillRow({ bill, paidState, onTogglePaid, onSetAmount, onSetMethod, onEdit, onDelete, showAcct, today }) {
+  const [open, setOpen] = useState(false);
+  const [editingAmt, setEditingAmt] = useState(false);
+  const paid = !!paidState?.paid;
+  const amount = paidState?.amount ?? bill.amount;
+  const method = paidState?.method ?? bill.method;
+  const dueDate = bill.dueDate;
+  const daysUntil = dueDate ? Math.round((dueDate - today) / 86400000) : null;
+  const overdue = !paid && daysUntil !== null && daysUntil < 0;
+  const soon = !paid && daysUntil !== null && daysUntil >= 0 && daysUntil <= 3;
+
+  const copy = async (text) => {
+    try { await navigator.clipboard?.writeText(text); } catch(e) {}
+  };
+
+  return (
+    <div className={`bill ${paid ? 'paid' : ''}`}>
+      <div className="bill-main" onClick={() => setOpen(o => !o)}>
+        <div className="bill-mark-cell" onClick={e => e.stopPropagation()}>
+          <PaidMark paid={paid} onClick={() => onTogglePaid(bill)} />
+        </div>
+        <div className="bill-due">
+          {dueDate ? <><span className="d">{dayNum(dueDate)}</span> {monthShort(dueDate).toUpperCase()}</> : '—'}
+        </div>
+        <div className="bill-name-cell">
+          <div className="bill-name">
+            {bill.name}
+            {soon && <span className="alert-tag">due in {daysUntil}d</span>}
+            {overdue && <span className="alert-tag overdue-tag">overdue</span>}
+          </div>
+          <div className="bill-meta">
+            <span className="cat-tag">{CAT_LABEL[bill.category]}</span>
+            {bill.acct && <span className="acct-inline">· {showAcct ? bill.acct : '••••'}</span>}
+            {bill.min != null && bill.min > 0 && bill.min !== bill.amount && (
+              <span className="min-inline">· min ${moneyPlain(bill.min)}</span>
+            )}
+          </div>
+        </div>
+        <div className="bill-method-cell" onClick={e => e.stopPropagation()}>
+          <MethodChip method={method} onClick={() => onSetMethod(bill, method === 'cash' ? 'credit' : 'cash')} />
+        </div>
+        <div className="bill-amt-cell" onClick={e => { e.stopPropagation(); setEditingAmt(true); }}>
+          {editingAmt ? (
+            <input autoFocus className="amt-input"
+              defaultValue={(amount ?? 0).toFixed(2)}
+              onBlur={(e) => { onSetAmount(bill, parseFloat(e.target.value) || 0); setEditingAmt(false); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingAmt(false); }} />
+          ) : (amount != null && amount > 0) ? (
+            <div className="bill-amt">
+              <span className="amt-cur">$</span>
+              <span className="amt-num">{moneyPlain(amount)}</span>
+            </div>
+          ) : (
+            <div className="bill-amt unset">set amt</div>
+          )}
+        </div>
+      </div>
+      {open && (
+        <div className="bill-detail">
+          {bill.acct && (
+            <div className="detail-row">
+              <span className="detail-label">Account</span>
+              <span className="detail-val mono">{bill.acct}</span>
+              <button className="copy-btn" onClick={() => copy(bill.acct)}>copy</button>
+            </div>
+          )}
+          {bill.notes && (
+            <div className="detail-row">
+              <span className="detail-label">Notes</span>
+              <span className="detail-val">{bill.notes}</span>
+            </div>
+          )}
+          <div className="detail-row">
+            <span className="detail-label">{bill.recurring ? 'Due day' : 'Date'}</span>
+            <span className="detail-val mono">{bill.recurring ? `${bill.dueDay} of each month` : (bill.date || '—')}</span>
+          </div>
+          {bill.min != null && bill.min > 0 && (
+            <div className="detail-row">
+              <span className="detail-label">Minimum</span>
+              <span className="detail-val mono">${moneyPlain(bill.min)}</span>
+              {amount != null && (
+                <><span className="detail-label" style={{ marginLeft: 14 }}>Paying</span>
+                <span className="detail-val mono">${moneyPlain(amount)}</span></>
+              )}
+            </div>
+          )}
+          <div className="detail-actions">
+            {bill.url && (
+              <a className="btn-link" href={bill.url} target="_blank" rel="noreferrer">Pay on site ↗</a>
+            )}
+            <button className="btn-ghost" onClick={() => onEdit(bill)}>Edit bill</button>
+            <button className="btn-ghost" onClick={() => onSetMethod(bill, method === 'cash' ? 'credit' : 'cash')}>
+              Pay with {method === 'cash' ? 'credit' : 'cash'}
+            </button>
+            <button className="btn-ghost danger" onClick={() => { if (confirm(`Delete "${bill.name}"?`)) onDelete(bill); }}>Delete</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Add/Edit Bill Form ──────────────────────────────────────────────────────
+function BillForm({ bill, onSave, onCancel }) {
+  const isEdit = !!bill?.id;
+  const todayISO = fmtISO(startOfDay(new Date()));
+  const init = bill || {
+    name: '', category: 'recurring', recurring: true,
+    dueDay: 1, date: todayISO,
+    amount: '', min: '', method: 'cash',
+    acct: '', url: '', notes: '',
+  };
+  const [f, setF] = useState({
+    name: init.name || '',
+    category: init.category || 'recurring',
+    recurring: init.recurring !== false && init.category !== 'oneoff',
+    dueDay: init.dueDay ?? 1,
+    date: init.date || todayISO,
+    amount: init.amount != null && init.amount !== '' ? String(init.amount) : '',
+    min: init.min != null && init.min !== '' ? String(init.min) : '',
+    method: init.method || 'cash',
+    acct: init.acct || '',
+    url: init.url || '',
+    notes: init.notes || '',
+  });
+
+  const update = (k, v) => setF(prev => {
+    const next = { ...prev, [k]: v };
+    if (k === 'category' && v === 'oneoff') next.recurring = false;
+    if (k === 'category' && v !== 'oneoff' && prev.category === 'oneoff') next.recurring = true;
+    return next;
+  });
+
+  const submit = () => {
+    if (!f.name.trim()) { alert('Bill name is required.'); return; }
+    const amt = f.amount === '' ? null : parseFloat(f.amount);
+    const minp = f.min === '' ? (amt ?? 0) : parseFloat(f.min);
+    const out = {
+      id: bill?.id || `b-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+      name: f.name.trim(),
+      category: f.category,
+      recurring: f.category === 'oneoff' ? false : !!f.recurring,
+      dueDay: f.recurring ? Math.max(1, Math.min(31, parseInt(f.dueDay, 10) || 1)) : null,
+      date: !f.recurring ? f.date : null,
+      amount: amt,
+      min: Number.isFinite(minp) ? minp : 0,
+      method: f.method,
+      acct: f.acct.trim(),
+      url: f.url.trim(),
+      notes: f.notes.trim(),
+    };
+    onSave(out);
+  };
+
+  return (
+    <div className="form-panel">
+      <div className="form-grid">
+        <div className="form-row full">
+          <label className="form-lbl">Bill name *</label>
+          <input value={f.name} onChange={e => update('name', e.target.value)}
+            placeholder="e.g. Rent, Chase Sapphire, Electric" autoFocus />
+        </div>
+
+        <div className="form-row">
+          <label className="form-lbl">Category</label>
+          <select value={f.category} onChange={e => update('category', e.target.value)}>
+            {CAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
+        <div className="form-row">
+          <label className="form-lbl">Repeats</label>
+          <div className="form-radio">
+            <label>
+              <input type="radio" name="rec" checked={f.recurring}
+                onChange={() => update('recurring', true)}
+                disabled={f.category === 'oneoff'} /> monthly
+            </label>
+            <label>
+              <input type="radio" name="rec" checked={!f.recurring}
+                onChange={() => update('recurring', false)} /> one-off
+            </label>
+          </div>
+        </div>
+
+        {f.recurring ? (
+          <div className="form-row">
+            <label className="form-lbl">Due day (1–31)</label>
+            <input type="number" min={1} max={31} value={f.dueDay}
+              onChange={e => update('dueDay', e.target.value)} />
+          </div>
+        ) : (
+          <div className="form-row">
+            <label className="form-lbl">Date</label>
+            <input type="date" value={f.date}
+              onChange={e => update('date', e.target.value)} />
+          </div>
+        )}
+
+        <div className="form-row">
+          <label className="form-lbl">Amount due (optional)</label>
+          <input type="number" step="0.01" placeholder="0.00"
+            value={f.amount} onChange={e => update('amount', e.target.value)} />
+        </div>
+
+        <div className="form-row">
+          <label className="form-lbl">Minimum payment (optional)</label>
+          <input type="number" step="0.01" placeholder="0.00"
+            value={f.min} onChange={e => update('min', e.target.value)} />
+        </div>
+
+        <div className="form-row">
+          <label className="form-lbl">Payment method</label>
+          <select value={f.method} onChange={e => update('method', e.target.value)}>
+            <option value="cash">cash</option>
+            <option value="credit">credit</option>
+          </select>
+        </div>
+
+        <div className="form-row">
+          <label className="form-lbl">Account / last 4</label>
+          <input value={f.acct} onChange={e => update('acct', e.target.value)}
+            placeholder="•••• 1234" />
+        </div>
+
+        <div className="form-row full">
+          <label className="form-lbl">Pay URL (optional)</label>
+          <input value={f.url} onChange={e => update('url', e.target.value)}
+            placeholder="https://..." />
+        </div>
+
+        <div className="form-row full">
+          <label className="form-lbl">Notes (optional)</label>
+          <textarea rows={2} value={f.notes} onChange={e => update('notes', e.target.value)} />
+        </div>
+      </div>
+      <div className="form-actions">
+        <button className="btn-secondary" onClick={onCancel}>Cancel</button>
+        <button className="btn-primary" onClick={submit}>{isEdit ? 'Save changes' : 'Add bill'}</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Cashflow Chart ──────────────────────────────────────────────────────────
+function CashflowChart({ periods, computeNet, height = 140 }) {
+  const data = periods.map(p => ({ period: p, net: computeNet(p) }));
+  const maxAbs = Math.max(...data.map(d => Math.abs(d.net)), 1);
+  const w = 100 / Math.max(data.length, 1);
+  let running = 0;
+  const cumulative = data.map(d => { running += d.net; return running; });
+  const maxCum = Math.max(...cumulative, 0);
+  const minCum = Math.min(...cumulative, 0);
+  const cumRange = Math.max(maxCum - minCum, 1);
+  const monthsShown = 3;
+
+  return (
+    <div className="chart" style={{ height }}>
+      <div className="chart-grid"><div className="grid-line zero" /></div>
+      {data.length > 1 && (
+        <svg className="chart-line" viewBox={`0 0 ${data.length * 100} 100`} preserveAspectRatio="none">
+          <polyline
+            points={cumulative.map((c, i) => `${i * 100 + 50},${100 - ((c - minCum) / cumRange) * 90 - 5}`).join(' ')}
+            fill="none" stroke="currentColor" strokeWidth="1.5"
+            vectorEffect="non-scaling-stroke" opacity="0.4" />
+        </svg>
+      )}
+      <div className="chart-bars">
+        {data.map((d, i) => {
+          const h = (Math.abs(d.net) / maxAbs) * 45;
+          const positive = d.net >= 0;
+          return (
+            <div className="bar-col" key={i} style={{ width: `${w}%` }}
+              title={`${d.period.label}: ${money(d.net)}`}>
+              <div className={`bar ${positive ? 'pos' : 'neg'}`}
+                style={{ height: `${h}%`, [positive ? 'bottom' : 'top']: '50%' }} />
+              {i % Math.max(1, Math.ceil(data.length / Math.min(monthsShown * 2, data.length))) === 0 && (
+                <div className="bar-lbl">{shortDate(d.period.start)}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Forecast Strip ──────────────────────────────────────────────────────────
+function ForecastStrip({ horizon, onHorizon, periods, computeNet, current }) {
+  const horizons = [
+    { id: 1, label: '1 mo', periods: 2 },
+    { id: 3, label: '3 mo', periods: 6 },
+    { id: 6, label: '6 mo', periods: 13 },
+    { id: 12, label: '12 mo', periods: 26 },
+  ];
+  const sel = horizons.find(h => h.id === horizon) || horizons[1];
+  const slice = periods.slice(current, current + sel.periods);
+  const total = slice.reduce((s, p) => s + computeNet(p), 0);
+  return (
+    <div className="forecast">
+      <div className="forecast-head">
+        <div>
+          <div className="income-lbl">Projected net</div>
+          <div className={`forecast-num ${total < 0 ? 'minus' : ''}`}>{money(total)}</div>
+          <div className="income-sub">through {slice[slice.length - 1]?.label.split(' – ')[1] || '—'}</div>
+        </div>
+        <div className="horizon-pick">
+          {horizons.map(h => (
+            <button key={h.id} className={h.id === horizon ? 'on' : ''}
+              onClick={() => onHorizon(h.id)}>{h.label}</button>
+          ))}
+        </div>
+      </div>
+      <CashflowChart periods={slice} computeNet={computeNet} height={120} />
+    </div>
+  );
+}
+
+// ── Main App ────────────────────────────────────────────────────────────────
+function App() {
+  const initial = useMemo(() => loadState() || {
+    ...DEFAULT_STATE,
+    payAnchor: defaultPayAnchor(),
+  }, []);
+  const [bills, setBills] = useState(initial.bills);
+  const [paid, setPaid] = useState(initial.paid);
+  const [paycheck, setPaycheck] = useState(initial.paycheck);
+  const [checking, setChecking] = useState(initial.checking);
+  const [payAnchor, setPayAnchor] = useState(initial.payAnchor || defaultPayAnchor());
+  const [settings, setSettings] = useState(initial.settings);
+  const [toast, setToast] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editingBill, setEditingBill] = useState(null);
+  const [showAnchor, setShowAnchor] = useState(false);
+
+  // Persist whenever anything changes
+  useEffect(() => {
+    saveState({ bills, paid, paycheck, checking, payAnchor, settings });
+  }, [bills, paid, paycheck, checking, payAnchor, settings]);
+
+  // Theme/density on body
+  useEffect(() => {
+    document.body.className = `theme-${settings.theme} density-${settings.density}`;
+    document.documentElement.style.setProperty('--paid-decoration', settings.strikePaid ? 'line-through' : 'none');
+  }, [settings.theme, settings.density, settings.strikePaid]);
+
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const payPeriods = useMemo(() => buildPayPeriods(payAnchor), [payAnchor]);
+  const currentPeriodIndex = useMemo(() => {
+    for (let i = 0; i < payPeriods.length; i++) {
+      if (today >= payPeriods[i].start && today <= payPeriods[i].end) return i;
+    }
+    return 2; // fall back to first non-historical period
+  }, [payPeriods, today]);
+  const [periodIdx, setPeriodIdx] = useState(currentPeriodIndex);
+  useEffect(() => { setPeriodIdx(currentPeriodIndex); }, [currentPeriodIndex]);
+
+  const period = payPeriods[periodIdx];
+  const nextPeriod = payPeriods[periodIdx + 1];
+  const isCurrent = periodIdx === currentPeriodIndex;
+
+  const allBills = useMemo(() => billsForPeriod(bills, period), [bills, period]);
+  const nextBills = useMemo(() => nextPeriod ? billsForPeriod(bills, nextPeriod) : [], [bills, nextPeriod]);
+
+  const available = checking + paycheck;
+  const billsTotal = allBills.reduce((s, b) => s + (b.amount || 0), 0);
+  const paidTotal = allBills.reduce((s, b) => {
+    const k = `${b.id}::${period.id}`;
+    return s + (paid[k]?.paid ? (paid[k].amount ?? b.amount ?? 0) : 0);
+  }, 0);
+  const afterBills = available - billsTotal;
+  const cashBillsTotal = allBills.filter(b => b.method === 'cash').reduce((s, b) => s + (b.amount || 0), 0);
+  const creditBillsTotal = billsTotal - cashBillsTotal;
+
+  const bufferAlloc = Math.max(0, Math.min(settings.bufferTarget, afterBills));
+  const bufferShort = Math.max(0, settings.bufferTarget - afterBills);
+  const allocPool = Math.max(0, afterBills - settings.bufferTarget);
+  const savingsAlloc = allocPool * (settings.savingsSplit / 100);
+  const debtAlloc = allocPool - savingsAlloc;
+
+  const computeNet = useCallback((p) => {
+    const inc = paycheck;
+    const periodBills = billsForPeriod(bills, p);
+    const cost = periodBills.reduce((s, b) => s + (b.amount || 0), 0);
+    return inc - cost;
+  }, [bills, paycheck]);
+
+  const groupedBills = useMemo(() => {
+    if (settings.grouping === 'category') {
+      const groups = {};
+      GROUP_ORDER_CAT.forEach(c => groups[c] = []);
+      allBills.forEach(b => { (groups[b.category] = groups[b.category] || []).push(b); });
+      return Object.entries(groups).filter(([_, arr]) => arr.length)
+        .map(([k, v]) => ({ key: k, label: CAT_LABEL[k], bills: v }));
+    }
+    if (settings.grouping === 'status') {
+      const unpaid = [], paidList = [];
+      allBills.forEach(b => (paid[`${b.id}::${period.id}`]?.paid ? paidList : unpaid).push(b));
+      return [
+        { key: 'unpaid', label: `Unpaid · ${unpaid.length}`, bills: unpaid },
+        { key: 'paid', label: `Paid · ${paidList.length}`, bills: paidList },
+      ].filter(g => g.bills.length);
+    }
+    return [{ key: 'all', label: null, bills: allBills }];
+  }, [settings.grouping, allBills, paid, period]);
+
+  const totalSavingsTracked = bills.filter(b => b.category === 'savings').reduce((s, b) => s + (b.amount || 0), 0);
+  const totalDebtBills = bills.filter(b => b.category === 'cc' || b.category === 'loan').length;
+
+  // ── Mutations ──
+  const togglePaid = (bill) => {
+    const k = `${bill.id}::${period.id}`;
+    setPaid(p => ({
+      ...p,
+      [k]: p[k]?.paid
+        ? { ...p[k], paid: false }
+        : { paid: true, amount: bill.amount ?? 0, method: bill.method, date: fmtISO(today) },
+    }));
+  };
+  const setAmount = (bill, amt) => {
+    setBills(arr => arr.map(b => b.id === bill.id ? { ...b, amount: amt } : b));
+    const k = `${bill.id}::${period.id}`;
+    setPaid(p => p[k]?.paid ? ({ ...p, [k]: { ...p[k], amount: amt } }) : p);
+  };
+  const setMethod = (bill, m) => {
+    setBills(arr => arr.map(b => b.id === bill.id ? { ...b, method: m } : b));
+    const k = `${bill.id}::${period.id}`;
+    setPaid(p => p[k]?.paid ? ({ ...p, [k]: { ...p[k], method: m } }) : p);
+  };
+  const saveBill = (b) => {
+    setBills(arr => arr.some(x => x.id === b.id) ? arr.map(x => x.id === b.id ? b : x) : [...arr, b]);
+    setAddOpen(false); setEditingBill(null);
+    flash(editingBill ? 'Bill updated' : 'Bill added');
+  };
+  const deleteBill = (b) => {
+    setBills(arr => arr.filter(x => x.id !== b.id));
+    setPaid(p => {
+      const next = { ...p };
+      Object.keys(next).forEach(k => { if (k.startsWith(`${b.id}::`)) delete next[k]; });
+      return next;
+    });
+    flash('Bill deleted');
+  };
+
+  const flash = (msg) => { setToast(msg); setTimeout(() => setToast(null), 1800); };
+
+  // ── Export / Import ──
+  const exportJSON = () => {
+    const data = { bills, paid, paycheck, checking, payAnchor, settings, exportedAt: new Date().toISOString(), version: 1 };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bills-${fmtISO(today)}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    flash('Exported');
+  };
+  const importJSON = () => {
+    const fi = document.getElementById('import-file');
+    fi.value = '';
+    fi.onchange = (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!data || typeof data !== 'object' || !Array.isArray(data.bills)) {
+            throw new Error('Invalid file');
+          }
+          if (!confirm('Replace your current data with the contents of this file? This cannot be undone.')) return;
+          setBills(data.bills);
+          setPaid(data.paid || {});
+          if (typeof data.paycheck === 'number') setPaycheck(data.paycheck);
+          if (typeof data.checking === 'number') setChecking(data.checking);
+          if (data.payAnchor) setPayAnchor(data.payAnchor);
+          if (data.settings) setSettings(s => ({ ...s, ...data.settings }));
+          flash('Imported');
+        } catch (err) { alert('Could not import: ' + err.message); }
+      };
+      reader.readAsText(file);
+    };
+    fi.click();
+  };
+  const wipeAll = () => {
+    if (!confirm('Erase ALL bills, paid history, and settings? This cannot be undone.')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
+  };
+
+  const cycleTheme = () => {
+    const order = ['paper', 'bone', 'ink'];
+    const next = order[(order.indexOf(settings.theme) + 1) % order.length];
+    setSettings(s => ({ ...s, theme: next }));
+  };
+
+  const nextBillsTotal = nextBills.reduce((s, b) => s + (b.amount || 0), 0);
+
+  return (
+    <div className="app">
+      {/* Brand row */}
+      <div className="brand-row">
+        <div className="brand">
+          <span>BILLS<span className="dot">.</span></span>
+          <span className="brand-sub">ledger</span>
+        </div>
+        <div className="period-nav">
+          <button onClick={() => setPeriodIdx(i => Math.max(0, i - 1))} aria-label="Previous">←</button>
+          <div>
+            <div className="period-label">{period.label}</div>
+            {isCurrent && <div className="period-today">current · {today.toLocaleString('en-US', { month: 'short', day: 'numeric' })}</div>}
+          </div>
+          <button onClick={() => setPeriodIdx(i => Math.min(payPeriods.length - 1, i + 1))} aria-label="Next">→</button>
+        </div>
+        <div className="toolbar">
+          <button className="tool-btn" onClick={() => { setEditingBill(null); setAddOpen(true); }}>+ Bill</button>
+          <button className="tool-btn" onClick={exportJSON}>Export</button>
+          <button className="tool-btn" onClick={importJSON}>Import</button>
+          <button className="tool-btn" onClick={cycleTheme}>Theme</button>
+        </div>
+      </div>
+
+      {/* Income block */}
+      <section className="income">
+        <div className="income-cell">
+          <div className="income-lbl">Paycheck</div>
+          <div className="income-num">
+            <span className="cur">$</span>
+            <input className="income-input" type="number" step="0.01" value={paycheck}
+              onChange={e => setPaycheck(parseFloat(e.target.value) || 0)} />
+          </div>
+          <div className="income-sub">biweekly · {showAnchor
+            ? <input type="date" value={payAnchor} onChange={e => setPayAnchor(e.target.value)}
+                style={{ font: 'inherit', border: 0, borderBottom: '1px solid var(--ink-3)', background: 'transparent', color: 'var(--ink)' }} />
+            : <span style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                onClick={() => setShowAnchor(true)}>last paid {payAnchor}</span>}</div>
+        </div>
+        <div className="income-cell">
+          <div className="income-lbl">Checking now</div>
+          <div className="income-num">
+            <span className="cur">$</span>
+            <input className="income-input" type="number" step="0.01" value={checking}
+              onChange={e => setChecking(parseFloat(e.target.value) || 0)} />
+          </div>
+          <div className="income-sub">enter your current balance</div>
+        </div>
+        <div className="income-cell">
+          <div className="income-lbl">Available</div>
+          <div className="income-num">
+            <span className="cur">$</span>
+            {moneyPlain(available)}
+          </div>
+          <div className="income-sub">paycheck + checking</div>
+        </div>
+      </section>
+
+      {/* Math + allocation */}
+      <section className="math">
+        <div>
+          <div className="math-line">
+            <span className="math-lbl">Available</span>
+            <span className="math-num">${moneyPlain(available)}</span>
+          </div>
+          <div className="math-line">
+            <span className="math-lbl">Bills due ({allBills.length})</span>
+            <span className="math-num muted">−${moneyPlain(billsTotal)}</span>
+          </div>
+          {paidTotal > 0 && (
+            <div className="math-line" style={{ paddingLeft: 14, borderBottom: 0, paddingTop: 4, paddingBottom: 4 }}>
+              <span className="math-lbl" style={{ fontSize: 10 }}>· paid so far</span>
+              <span className="math-num muted" style={{ fontSize: 13 }}>${moneyPlain(paidTotal)}</span>
+            </div>
+          )}
+          <div className="math-line total">
+            <span className="math-lbl">After bills</span>
+            <span className={`math-num lg ${afterBills < 0 ? 'muted' : ''}`}>
+              {afterBills < 0 ? '−' : ''}${moneyPlain(afterBills)}
+            </span>
+          </div>
+        </div>
+
+        <div className="alloc">
+          <div className="income-lbl">
+            {bufferShort > 0
+              ? <>Short ${moneyPlain(bufferShort)} of ${moneyPlain(settings.bufferTarget)} buffer</>
+              : <>Allocate ${moneyPlain(Math.max(0, allocPool))} after ${moneyPlain(settings.bufferTarget)} buffer</>}
+          </div>
+          <div className="alloc-bar">
+            <div className="alloc-seg seg-buffer" style={{ width: `${Math.max(0, (bufferAlloc / Math.max(afterBills, 0.01)) * 100)}%` }} />
+            <div className="alloc-seg seg-savings" style={{ width: `${Math.max(0, (savingsAlloc / Math.max(afterBills, 0.01)) * 100)}%` }} />
+            <div className="alloc-seg seg-debt" style={{ width: `${Math.max(0, (debtAlloc / Math.max(afterBills, 0.01)) * 100)}%` }} />
+          </div>
+          <div className="alloc-legend">
+            <div><span className="l">Buffer</span><span className="v">${moneyPlain(bufferAlloc)}</span></div>
+            <div><span className="l">Savings</span><span className="v">${moneyPlain(savingsAlloc)}</span></div>
+            <div><span className="l">Debt</span><span className="v">${moneyPlain(debtAlloc)}</span></div>
+          </div>
+          <div className="alloc-stepper">
+            <label>Buffer $
+              <input type="number" min={0} step={100} value={settings.bufferTarget}
+                style={{ width: 80 }}
+                onChange={e => setSettings(s => ({ ...s, bufferTarget: Math.max(0, parseInt(e.target.value) || 0) }))} />
+            </label>
+            <label>Savings
+              <input type="number" min={0} max={100} value={settings.savingsSplit}
+                onChange={e => setSettings(s => ({ ...s, savingsSplit: Math.max(0, Math.min(100, parseInt(e.target.value) || 0)) }))} />%
+            </label>
+            <span style={{ color: 'var(--ink-3)', fontSize: 10, letterSpacing: '0.06em' }}>
+              Debt {Math.max(0, 100 - settings.savingsSplit)}%
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Summary tiles */}
+      <div className="tiles">
+        <div className="tile">
+          <div className="tile-lbl">Bills this period</div>
+          <div className="tile-num">${moneyPlain(billsTotal)}</div>
+          <div className="tile-sub">{allBills.length} bills</div>
+        </div>
+        <div className="tile">
+          <div className="tile-lbl">Cash bills</div>
+          <div className="tile-num">${moneyPlain(cashBillsTotal)}</div>
+          <div className="tile-sub">out of pocket</div>
+        </div>
+        <div className="tile">
+          <div className="tile-lbl">Credit bills</div>
+          <div className="tile-num">${moneyPlain(creditBillsTotal)}</div>
+          <div className="tile-sub">pay back via card</div>
+        </div>
+        <div className="tile">
+          <div className="tile-lbl">Recurring bills</div>
+          <div className="tile-num">{bills.filter(b => b.recurring).length}</div>
+          <div className="tile-sub">{totalDebtBills} debt · {bills.filter(b => b.category === 'savings').length} savings</div>
+        </div>
+      </div>
+
+      {/* Bills section */}
+      <section className="section">
+        <div className="section-head">
+          <div className="section-title">Bills this period</div>
+          <div className="section-tabs">
+            <button className={settings.grouping === 'due' ? 'on' : ''}
+              onClick={() => setSettings(s => ({ ...s, grouping: 'due' }))}>By date</button>
+            <button className={settings.grouping === 'category' ? 'on' : ''}
+              onClick={() => setSettings(s => ({ ...s, grouping: 'category' }))}>By category</button>
+            <button className={settings.grouping === 'status' ? 'on' : ''}
+              onClick={() => setSettings(s => ({ ...s, grouping: 'status' }))}>By status</button>
+          </div>
+        </div>
+
+        {(addOpen || editingBill) ? (
+          <BillForm bill={editingBill}
+            onSave={saveBill}
+            onCancel={() => { setAddOpen(false); setEditingBill(null); }} />
+        ) : (
+          <div className="add-quick-collapsed" onClick={() => { setEditingBill(null); setAddOpen(true); }}>
+            + add bill
+          </div>
+        )}
+
+        {bills.length === 0 ? (
+          <div className="empty-state" style={{ marginTop: 20 }}>
+            <p>No bills yet.</p>
+            <p>Add your first bill above, or import a previous backup.</p>
+          </div>
+        ) : allBills.length === 0 ? (
+          <div className="empty-state" style={{ marginTop: 20 }}>
+            <p>No bills due this period.</p>
+            <p>Navigate periods with ← → above, or add a bill.</p>
+          </div>
+        ) : groupedBills.map(g => (
+          <div className="bill-group" key={g.key}>
+            {g.label && (
+              <div className="bill-group-head">
+                <span>{g.label}</span>
+                <span>{g.bills.length} · ${moneyPlain(g.bills.reduce((s, b) => s + (b.amount || 0), 0))}</span>
+              </div>
+            )}
+            {g.bills.map(b => (
+              <BillRow key={b.id} bill={b}
+                paidState={paid[`${b.id}::${period.id}`]}
+                onTogglePaid={togglePaid}
+                onSetAmount={setAmount}
+                onSetMethod={setMethod}
+                onEdit={(bill) => {
+                  // open editor with the original (un-period-dated) bill record
+                  const original = bills.find(x => x.id === bill.id);
+                  setAddOpen(false);
+                  setEditingBill(original || bill);
+                }}
+                onDelete={deleteBill}
+                showAcct={settings.showAccts}
+                today={today} />
+            ))}
+          </div>
+        ))}
+      </section>
+
+      {/* Forecast */}
+      {bills.length > 0 && (
+        <section className="section">
+          <div className="section-head">
+            <div className="section-title">Forecast</div>
+            <div className="section-meta">net per pay period · cumulative line</div>
+          </div>
+          <ForecastStrip
+            horizon={settings.horizon}
+            onHorizon={v => setSettings(s => ({ ...s, horizon: v }))}
+            periods={payPeriods}
+            computeNet={computeNet}
+            current={periodIdx} />
+        </section>
+      )}
+
+      {/* Next period */}
+      {bills.length > 0 && (
+        <section className="section">
+          <div className="section-head">
+            <div className="section-title">Next period</div>
+            <div className="section-meta">
+              {nextPeriod ? `${nextPeriod.label} · ${nextBills.length} bills · $${moneyPlain(nextBillsTotal)}` : '—'}
+            </div>
+          </div>
+          {nextBills.length > 0 ? (
+            <div className="events-list">
+              {nextBills.map(b => (
+                <div className="event-row" key={b.id}>
+                  <span className="event-date">
+                    {b.dueDate ? b.dueDate.toLocaleString('en-US', { month: 'short', day: 'numeric' }) : '—'}
+                  </span>
+                  <span className="event-name">
+                    {b.name}
+                    <span className="e-note">{CAT_LABEL[b.category]} · {b.method}</span>
+                  </span>
+                  <span className="event-amt minus">−${moneyPlain(b.amount || 0)}</span>
+                </div>
+              ))}
+              <div className="event-row" style={{ borderBottom: 0, borderTop: '1px solid var(--ink)', paddingTop: 12, marginTop: 4 }}>
+                <span className="event-date">total</span>
+                <span></span>
+                <span className="event-amt" style={{ fontSize: 16, fontWeight: 500 }}>−${moneyPlain(nextBillsTotal)}</span>
+              </div>
+            </div>
+          ) : (
+            <div style={{ color: 'var(--ink-3)', padding: 12, fontSize: 12 }}>No bills in next period.</div>
+          )}
+        </section>
+      )}
+
+      <div className="footnote">
+        <span>biweekly · {bills.length} bills tracked · tap to mark paid · click amount to edit</span>
+        <span className="links">
+          <button onClick={exportJSON}>export JSON</button>
+          <button onClick={importJSON}>import JSON</button>
+          <button onClick={wipeAll}>reset all</button>
+        </span>
+      </div>
+
+      {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
