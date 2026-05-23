@@ -426,12 +426,12 @@ function saveState(state) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
 }
 
-// Default pay anchor: nearest past Friday from today.
+// Default pay anchor: the upcoming Friday (or today if today is Friday).
 function defaultPayAnchor() {
   const today = startOfDay(new Date());
   const dow = today.getDay();              // 0=Sun .. 6=Sat
-  const back = (dow - 5 + 7) % 7;          // days since most recent Friday
-  return fmtISO(addDays(today, -back));
+  const fwd = (5 - dow + 7) % 7;           // days until next Friday (0 if today is Fri)
+  return fmtISO(addDays(today, fwd));
 }
 
 // Build biweekly pay periods from anchor, spanning past 2 and forward 26.
@@ -1045,7 +1045,7 @@ function App() {
             ? <input type="date" value={payAnchor} onChange={e => setPayAnchor(e.target.value)}
                 style={{ font: 'inherit', border: 0, borderBottom: '1px solid var(--ink-3)', background: 'transparent', color: 'var(--ink)' }} />
             : <span style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                onClick={() => setShowAnchor(true)}>last paid {payAnchor}</span>}</div>
+                onClick={() => setShowAnchor(true)}>next pay {payAnchor}</span>}</div>
         </div>
         <div className="income-cell">
           <div className="income-lbl">Checking now</div>
