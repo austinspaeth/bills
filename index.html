@@ -36,7 +36,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 button { font-family: var(--mono); }
-input, select, textarea { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+input, select, textarea {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+}
+/* Big display input keeps its size */
+.income-input { font-size: 32px; }
 a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--ink-4); }
 a:hover { border-bottom-color: var(--ink); }
 
@@ -125,8 +131,8 @@ a:hover { border-bottom-color: var(--ink); }
 .alloc-stepper { display: flex; gap: 12px; align-items: center; padding-top: 10px; border-top: 1px solid var(--rule); font-size: 11px; flex-wrap: wrap; }
 .alloc-stepper label { display: flex; align-items: center; gap: 6px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
 .alloc-stepper input[type="number"] {
-  width: 56px; padding: 3px 5px; border: 1px solid var(--rule-strong); background: var(--bg);
-  color: var(--ink); font-size: 12px; text-align: right;
+  width: 80px; padding: 3px 6px; border: 1px solid var(--rule-strong); background: var(--bg);
+  color: var(--ink); text-align: right;
 }
 .alloc-stepper input[type="number"]:focus { outline: 1px solid var(--ink); outline-offset: -1px; }
 
@@ -198,7 +204,7 @@ a:hover { border-bottom-color: var(--ink); }
 .bill-amt .amt-cur { color: var(--ink-3); margin-right: 2px; }
 .bill-amt.unset { color: var(--ink-4); font-style: italic; }
 .amt-input {
-  font-family: var(--mono); font-size: 15px; width: 100px;
+  font-family: var(--mono); width: 110px;
   background: var(--bg); border: 1px solid var(--ink); border-radius: 0;
   padding: 4px 8px; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums;
 }
@@ -454,8 +460,7 @@ const DEFAULT_STATE = {
   bills: [],
   paid: {},
   incomeEvents: [],       // [{ id, name, amount, date: 'YYYY-MM-DD' }]
-  paycheck: 0,
-  checking: 0,
+  incomeByPeriod: {},     // { [periodId]: { paycheck: number, checking: number } }
   payAnchor: null,        // ISO date — last/known paycheck Friday; biweekly from here
   settings: {
     grouping: 'due',
@@ -918,15 +923,29 @@ function ForecastStrip({ horizon, onHorizon, periods, computeNet, current }) {
 
 // ── Main App ────────────────────────────────────────────────────────────────
 function App() {
-  const initial = useMemo(() => loadState() || {
-    ...DEFAULT_STATE,
-    payAnchor: defaultPayAnchor(),
+  const initial = useMemo(() => {
+    const loaded = loadState();
+    if (!loaded) return { ...DEFAULT_STATE, payAnchor: defaultPayAnchor() };
+    // Migrate legacy top-level paycheck/checking into the current period's slot
+    const hasPeriodIncome = loaded.incomeByPeriod && Object.keys(loaded.incomeByPeriod).length > 0;
+    if (!hasPeriodIncome && (loaded.paycheck || loaded.checking)) {
+      const anchor = loaded.payAnchor || defaultPayAnchor();
+      const periods = buildPayPeriods(anchor);
+      const t = startOfDay(new Date());
+      const curIdx = periods.findIndex(p => t >= p.start && t <= p.end);
+      const cur = curIdx >= 0 ? periods[curIdx] : null;
+      loaded.incomeByPeriod = cur
+        ? { [cur.id]: { paycheck: loaded.paycheck || 0, checking: loaded.checking || 0 } }
+        : {};
+    }
+    delete loaded.paycheck;
+    delete loaded.checking;
+    return loaded;
   }, []);
   const [bills, setBills] = useState(initial.bills);
   const [paid, setPaid] = useState(initial.paid);
   const [incomeEvents, setIncomeEvents] = useState(initial.incomeEvents || []);
-  const [paycheck, setPaycheck] = useState(initial.paycheck);
-  const [checking, setChecking] = useState(initial.checking);
+  const [incomeByPeriod, setIncomeByPeriod] = useState(initial.incomeByPeriod || {});
   const [payAnchor, setPayAnchor] = useState(initial.payAnchor || defaultPayAnchor());
   const [settings, setSettings] = useState(initial.settings);
   const [toast, setToast] = useState(null);
@@ -938,8 +957,8 @@ function App() {
 
   // Persist whenever anything changes
   useEffect(() => {
-    saveState({ bills, paid, incomeEvents, paycheck, checking, payAnchor, settings });
-  }, [bills, paid, incomeEvents, paycheck, checking, payAnchor, settings]);
+    saveState({ bills, paid, incomeEvents, incomeByPeriod, payAnchor, settings });
+  }, [bills, paid, incomeEvents, incomeByPeriod, payAnchor, settings]);
 
   // Theme/density on body
   useEffect(() => {
@@ -964,6 +983,17 @@ function App() {
 
   const allBills = useMemo(() => billsForPeriod(bills, period), [bills, period]);
   const nextBills = useMemo(() => nextPeriod ? billsForPeriod(bills, nextPeriod) : [], [bills, nextPeriod]);
+
+  // Per-period paycheck & checking — unique to each pay period
+  const periodIncome = incomeByPeriod[period.id] || {};
+  const paycheck = periodIncome.paycheck || 0;
+  const checking = periodIncome.checking || 0;
+  const setPaycheck = (v) => setIncomeByPeriod(m => ({
+    ...m, [period.id]: { ...(m[period.id] || {}), paycheck: v }
+  }));
+  const setChecking = (v) => setIncomeByPeriod(m => ({
+    ...m, [period.id]: { ...(m[period.id] || {}), checking: v }
+  }));
 
   const extrasInPeriod = useCallback((p) => incomeEvents.filter(e => {
     if (!e.date) return false;
@@ -991,11 +1021,12 @@ function App() {
   const debtAlloc = allocPool - savingsAlloc;
 
   const computeNet = useCallback((p) => {
-    const inc = paycheck + extrasInPeriod(p).reduce((s, e) => s + (e.amount || 0), 0);
+    const inc = (incomeByPeriod[p.id]?.paycheck || 0)
+      + extrasInPeriod(p).reduce((s, e) => s + (e.amount || 0), 0);
     const periodBills = billsForPeriod(bills, p);
     const cost = periodBills.reduce((s, b) => s + (b.amount || 0), 0);
     return inc - cost;
-  }, [bills, paycheck, extrasInPeriod]);
+  }, [bills, incomeByPeriod, extrasInPeriod]);
 
   const groupedBills = useMemo(() => {
     if (settings.grouping === 'category') {
@@ -1072,7 +1103,7 @@ function App() {
 
   // ── Export / Import ──
   const exportJSON = () => {
-    const data = { bills, paid, incomeEvents, paycheck, checking, payAnchor, settings, exportedAt: new Date().toISOString(), version: 1 };
+    const data = { bills, paid, incomeEvents, incomeByPeriod, payAnchor, settings, exportedAt: new Date().toISOString(), version: 1 };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1099,8 +1130,14 @@ function App() {
           setBills(data.bills);
           setPaid(data.paid || {});
           setIncomeEvents(Array.isArray(data.incomeEvents) ? data.incomeEvents : []);
-          if (typeof data.paycheck === 'number') setPaycheck(data.paycheck);
-          if (typeof data.checking === 'number') setChecking(data.checking);
+          // Prefer incomeByPeriod; fall back to legacy top-level paycheck/checking → current period
+          if (data.incomeByPeriod && typeof data.incomeByPeriod === 'object') {
+            setIncomeByPeriod(data.incomeByPeriod);
+          } else if (typeof data.paycheck === 'number' || typeof data.checking === 'number') {
+            setIncomeByPeriod({ [period.id]: { paycheck: data.paycheck || 0, checking: data.checking || 0 } });
+          } else {
+            setIncomeByPeriod({});
+          }
           if (data.payAnchor) setPayAnchor(data.payAnchor);
           if (data.settings) setSettings(s => ({ ...s, ...data.settings }));
           flash('Imported');
