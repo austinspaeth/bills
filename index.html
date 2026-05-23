@@ -128,10 +128,10 @@ a:hover { border-bottom-color: var(--ink); }
 .alloc { display: flex; flex-direction: column; gap: 12px; padding: 16px 18px; border: 1px solid var(--rule-strong); }
 .alloc-bar { display: flex; height: 10px; background: var(--bg-2); border: 1px solid var(--rule); }
 .alloc-seg { height: 100%; transition: width .25s; }
-.seg-debt { background: var(--ink); }
-.seg-savings { background: var(--ink-3); }
+.seg-leftover { background: var(--ink); }
 .seg-buffer { background: var(--ink-4); }
 .alloc-legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; font-size: 11px; }
+.alloc-legend.two { grid-template-columns: 1fr 1fr; }
 .alloc-legend > div { display: flex; flex-direction: column; gap: 3px; }
 .alloc-legend .l { color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; font-size: 10px; }
 .alloc-legend .v { font-size: 14px; color: var(--ink); }
@@ -567,7 +567,6 @@ const DEFAULT_STATE = {
     horizon: 3,
     forecastMode: 'cashflow',
     bufferTarget: 3000,
-    savingsSplit: 40,
     theme: 'paper',
     density: 'regular',
     showAccts: true,
@@ -1084,15 +1083,14 @@ function SavingsStrip({ horizon, onHorizon, periods, projectSavings, current }) 
   const rows = projectSavings(slice);
   const last = rows[rows.length - 1];
   const totalSaved = last?.savings || 0;
-  const totalDebt = last?.debtPaid || 0;
   return (
     <div className="forecast">
       <div className="forecast-head">
         <div>
-          <div className="income-lbl">Projected savings</div>
+          <div className="income-lbl">Projected left over</div>
           <div className="forecast-num">{money(totalSaved)}</div>
           <div className="income-sub">
-            + {money(totalDebt)} to debt · through {slice[slice.length - 1]?.label.split(' – ')[1] || '—'}
+            kept out of buffer · through {slice[slice.length - 1]?.label.split(' – ')[1] || '—'}
           </div>
         </div>
         <div className="horizon-pick">
@@ -1250,9 +1248,7 @@ function App() {
 
   const bufferAlloc = Math.max(0, Math.min(settings.bufferTarget, afterBills));
   const bufferShort = Math.max(0, settings.bufferTarget - afterBills);
-  const allocPool = Math.max(0, afterBills - settings.bufferTarget);
-  const savingsAlloc = allocPool * (settings.savingsSplit / 100);
-  const debtAlloc = allocPool - savingsAlloc;
+  const leftoverAlloc = Math.max(0, afterBills - settings.bufferTarget);
 
   // Income estimate for a period: explicit paycheck if set, else the estimate,
   // plus any manually-added extra income that lands in that period.
@@ -1275,26 +1271,23 @@ function App() {
   // the forecast reflects "right now" regardless of which period is on screen.
   const currentChecking = incomeByPeriod[payPeriods[currentPeriodIndex]?.id]?.checking || 0;
 
-  // Project savings accumulation across periods using the buffer/split rules.
-  // Starts from the current period's checking balance, runs the same allocation
-  // each period: refill buffer first, then split the excess by savingsSplit%.
+  // Project cumulative left-over across periods. Each period: add income, take
+  // out cash bills, keep the buffer in checking; everything above the buffer is
+  // left over (cumulative).
   const projectSavings = useCallback((periods) => {
     let checkingBal = currentChecking;
-    let savings = 0, debtPaid = 0;
+    let savings = 0;
     return periods.map(p => {
       checkingBal += estIncomeForPeriod(p) - cashBillsForPeriod(p);
-      let savingsAdd = 0, debtAdd = 0;
+      let savingsAdd = 0;
       if (checkingBal > settings.bufferTarget) {
-        const excess = checkingBal - settings.bufferTarget;
-        savingsAdd = excess * (settings.savingsSplit / 100);
-        debtAdd = excess - savingsAdd;
+        savingsAdd = checkingBal - settings.bufferTarget;
         checkingBal = settings.bufferTarget;
       }
       savings += savingsAdd;
-      debtPaid += debtAdd;
-      return { period: p, savings, debtPaid, checking: checkingBal, savingsAdd, debtAdd };
+      return { period: p, savings, checking: checkingBal, savingsAdd };
     });
-  }, [currentChecking, estIncomeForPeriod, cashBillsForPeriod, settings.bufferTarget, settings.savingsSplit]);
+  }, [currentChecking, estIncomeForPeriod, cashBillsForPeriod, settings.bufferTarget]);
 
   // Trailing-3-month averages (current month + 2 prior). Cost is always
   // computable from recurring bills; income/saved/debt only count months that
@@ -1330,22 +1323,26 @@ function App() {
     const avgIncome = incomeMonths.length
       ? monthsBack.reduce((s, _, i) => s + (incomes[i].has ? incomes[i].sum : 0), 0) / incomeMonths.length
       : null;
-    let savedSum = 0, debtSum = 0;
+    let savedSum = 0;
     monthsBack.forEach((_, i) => {
       if (!incomes[i].has) return;
-      const surplus = Math.max(0, incomes[i].sum - costs[i]);
-      savedSum += surplus * (settings.savingsSplit / 100);
-      debtSum += surplus * (1 - settings.savingsSplit / 100);
+      savedSum += Math.max(0, incomes[i].sum - costs[i]);
     });
     const n = incomeMonths.length;
     return {
       avgCost,
       avgIncome,
       avgSaved: n ? savedSum / n : null,
-      avgDebt: n ? debtSum / n : null,
       incomeMonthCount: n,
     };
-  }, [bills, payPeriods, incomeByPeriod, incomeEvents, settings.savingsSplit, today]);
+  }, [bills, payPeriods, incomeByPeriod, incomeEvents, today]);
+
+  // Projected cumulative left-over saved over the next 12 months.
+  const oneYearSaved = useMemo(() => {
+    const slice = payPeriods.slice(currentPeriodIndex, currentPeriodIndex + 26);
+    const rows = projectSavings(slice);
+    return rows.length ? rows[rows.length - 1].savings : 0;
+  }, [payPeriods, currentPeriodIndex, projectSavings]);
 
   const groupedBills = useMemo(() => {
     if (settings.grouping === 'category') {
@@ -1366,8 +1363,6 @@ function App() {
     return [{ key: 'all', label: null, bills: allBills }];
   }, [settings.grouping, allBills, paid, period]);
 
-  const totalSavingsTracked = bills.filter(b => b.category === 'savings').reduce((s, b) => s + (b.amount || 0), 0);
-  const totalDebtBills = bills.filter(b => b.category === 'cc' || b.category === 'loan').length;
 
   // ── Mutations ──
   const togglePaid = (bill) => {
@@ -1637,17 +1632,15 @@ function App() {
           <div className="income-lbl">
             {bufferShort > 0
               ? <>Short ${moneyPlain(bufferShort)} of ${moneyPlain(settings.bufferTarget)} buffer</>
-              : <>Allocate ${moneyPlain(Math.max(0, allocPool))} after ${moneyPlain(settings.bufferTarget)} buffer</>}
+              : <>${moneyPlain(leftoverAlloc)} left over after ${moneyPlain(settings.bufferTarget)} buffer</>}
           </div>
           <div className="alloc-bar">
             <div className="alloc-seg seg-buffer" style={{ width: `${Math.max(0, (bufferAlloc / Math.max(afterBills, 0.01)) * 100)}%` }} />
-            <div className="alloc-seg seg-savings" style={{ width: `${Math.max(0, (savingsAlloc / Math.max(afterBills, 0.01)) * 100)}%` }} />
-            <div className="alloc-seg seg-debt" style={{ width: `${Math.max(0, (debtAlloc / Math.max(afterBills, 0.01)) * 100)}%` }} />
+            <div className="alloc-seg seg-leftover" style={{ width: `${Math.max(0, (leftoverAlloc / Math.max(afterBills, 0.01)) * 100)}%` }} />
           </div>
-          <div className="alloc-legend">
-            <div><span className="l">Buffer</span><span className="v">${moneyPlain(bufferAlloc)}</span></div>
-            <div><span className="l">Savings</span><span className="v">${moneyPlain(savingsAlloc)}</span></div>
-            <div><span className="l">Debt</span><span className="v">${moneyPlain(debtAlloc)}</span></div>
+          <div className="alloc-legend two">
+            <div><span className="l">Buffer (kept in checking)</span><span className="v">${moneyPlain(bufferAlloc)}</span></div>
+            <div><span className="l">Left over</span><span className="v">${moneyPlain(leftoverAlloc)}</span></div>
           </div>
           <div className="alloc-stepper">
             <label>Buffer $
@@ -1656,13 +1649,8 @@ function App() {
                 value={settings.bufferTarget}
                 onChange={v => setSettings(s => ({ ...s, bufferTarget: Math.max(0, Math.round(v)) }))} />
             </label>
-            <label>Savings
-              <NumericInput type="number" min={0} max={100}
-                value={settings.savingsSplit}
-                onChange={v => setSettings(s => ({ ...s, savingsSplit: Math.max(0, Math.min(100, Math.round(v))) }))} />%
-            </label>
             <span style={{ color: 'var(--ink-3)', fontSize: 10, letterSpacing: '0.06em' }}>
-              Debt {Math.max(0, 100 - settings.savingsSplit)}%
+              kept in checking · rest is left over
             </span>
           </div>
         </div>
@@ -1688,7 +1676,7 @@ function App() {
         <div className="tile">
           <div className="tile-lbl">Recurring bills</div>
           <div className="tile-num">{bills.filter(b => b.recurring).length}</div>
-          <div className="tile-sub">{totalDebtBills} debt · {bills.filter(b => b.category === 'savings').length} savings</div>
+          <div className="tile-sub">{bills.filter(b => !b.recurring).length} one-off</div>
         </div>
       </div>
 
@@ -1802,12 +1790,12 @@ function App() {
             <div className="metric-card">
               <div className="metric-lbl">Avg saved / mo</div>
               <div className="metric-num">{metrics.avgSaved == null ? '—' : `$${moneyPlain(metrics.avgSaved)}`}</div>
-              <div className="metric-sub">{settings.savingsSplit}% of surplus</div>
+              <div className="metric-sub">income − cost, last 3 months</div>
             </div>
             <div className="metric-card">
-              <div className="metric-lbl">Avg debt paid / mo</div>
-              <div className="metric-num">{metrics.avgDebt == null ? '—' : `$${moneyPlain(metrics.avgDebt)}`}</div>
-              <div className="metric-sub">{Math.max(0, 100 - settings.savingsSplit)}% of surplus</div>
+              <div className="metric-lbl">Saved · 1 yr</div>
+              <div className="metric-num">${moneyPlain(oneYearSaved)}</div>
+              <div className="metric-sub">projected cumulative left over</div>
             </div>
           </div>
         </section>
