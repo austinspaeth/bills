@@ -1178,9 +1178,26 @@ function App() {
   const bufferShort = Math.max(0, settings.bufferTarget - afterBills);
   const leftoverAlloc = Math.max(0, afterBills - settings.bufferTarget);
 
-  const cashBillsForPeriod = useCallback((p) =>
-    billsForPeriod(bills, p).filter(b => b.method === 'cash').reduce((s, b) => s + (b.amount || 0), 0),
-    [bills]);
+  // Cash that actually leaves a period's checking — mirrors the allocation
+  // block: that period's cash bills (excluding any paid ahead from another
+  // period) plus cash prepaid OUT of this period toward bills living elsewhere.
+  const cashOutForPeriod = useCallback((p) => {
+    const billsCash = billsForPeriod(bills, p)
+      .filter(b => {
+        if (b.method !== 'cash') return false;
+        const rec = paid[`${b.id}::${p.id}`];
+        const paidAhead = !!(rec?.paid && rec.paidFromPeriod && rec.paidFromPeriod !== p.id);
+        return !paidAhead;
+      })
+      .reduce((s, b) => s + (b.amount || 0), 0);
+    let prepaid = 0;
+    Object.entries(paid).forEach(([key, rec]) => {
+      if (!rec?.paid || rec.method !== 'cash' || rec.paidFromPeriod !== p.id) return;
+      const pid = key.slice(key.indexOf('::') + 2);
+      if (pid !== p.id) prepaid += (rec.amount || 0);
+    });
+    return billsCash + prepaid;
+  }, [bills, paid]);
 
 
   // Per-period left over — the SAME calculation as the allocation block, run
@@ -1196,8 +1213,8 @@ function App() {
     const pc = fut ? ((manualPc != null && manualPc !== 0) ? manualPc : estimatedPaycheck) : (manualPc || 0);
     const checkingP = fut ? (manualCh != null ? manualCh : settings.bufferTarget) : (manualCh || 0);
     const extras = extrasInPeriod(p).reduce((s, e) => s + (e.amount || 0), 0);
-    return checkingP + pc + extras - cashBillsForPeriod(p) - settings.bufferTarget;
-  }, [payPeriods, currentPeriodIndex, incomeByPeriod, estimatedPaycheck, extrasInPeriod, cashBillsForPeriod, settings.bufferTarget]);
+    return checkingP + pc + extras - cashOutForPeriod(p) - settings.bufferTarget;
+  }, [payPeriods, currentPeriodIndex, incomeByPeriod, estimatedPaycheck, extrasInPeriod, cashOutForPeriod, settings.bufferTarget]);
 
   // Per-period left over + running cumulative across a set of periods.
   const projectLeftover = useCallback((periods) => {
